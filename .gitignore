@@ -1,0 +1,8 @@
+.DS_Store
+.ipynb_checkpoints/
+
+# Weather experiments: secrets and raw API responses
+.env
+*.p8
+weather/data/raw/
+__pycache__/

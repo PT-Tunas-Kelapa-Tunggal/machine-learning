@@ -1,0 +1,7 @@
+requests
+pyjwt
+cryptography
+pandas
+matplotlib
+python-dotenv
+openpyxl
