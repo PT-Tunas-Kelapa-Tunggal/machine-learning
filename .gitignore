@@ -6,3 +6,7 @@
 *.p8
 weather/data/raw/
 __pycache__/
+
+# NASA POWER job: real plot locations and generated output
+weather/plots.json
+weather/data/job/
