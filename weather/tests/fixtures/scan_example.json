@@ -1,0 +1,8 @@
+{
+ "about": "A made-up scan manifest, the shape a phone would upload after a flight (VARI_CONFIDENCE.md).",
+ "scan_id": "scan-0001",
+ "plot_id": "plot-alpha",
+ "flight_start": "2023-06-01T02:40:00Z",
+ "flight_end": "2023-06-01T03:05:00Z",
+ "vari": {"crowns": 42, "median": 0.118, "iqr": 0.041}
+}
