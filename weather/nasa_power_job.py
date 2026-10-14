@@ -217,7 +217,8 @@ class WeatherKit:
         return self._get(lat, lon, params)
 
     def hourly(self, lat, lon, start, end):
-        """Past hourly values for the hours starting in [start, end) (aware datetimes, one request).
+        """Past hourly values for the hours starting in [start, end) (aware datetimes, one request of at most 240 hours:
+        Apple answers 400 to a longer range).
 
         Returns {hour start (UTC): {"cloud_cover", "rain_mm", "daylight", "condition"}}. An hour returned twice keeps a
         value only if the copies agree (rules.daily_from_pairs), as daily rain does.

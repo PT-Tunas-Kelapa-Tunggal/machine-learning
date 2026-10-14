@@ -172,6 +172,33 @@ def fetch_weatherkit_history(start, end, chunk_days=10, forever=None):
     return df[(df.index >= start) & (df.index <= end)]
 
 
+def fetch_weatherkit_hourly(start, end, chunk_days=10, forever=None):
+    """Past hourly values for the site, local days start to end (inclusive), 10 days per request (Apple's limit).
+
+    One row per hour (UTC index): cloud_cover, rain_mm, daylight, condition. An hour returned twice is kept once when
+    the rows agree and dropped (missing) when they don't, as in fetch_weatherkit_history. Model values.
+    """
+    parts, day = [], start
+    while day <= end:
+        stop = min(day + timedelta(days=chunk_days - 1), end)
+        params = {"dataSets": "forecastHourly", "timezone": str(TZ),
+                  "hourlyStart": _utc(day), "hourlyEnd": _utc(stop + timedelta(days=1))}
+        payload = cached("weatherkit", f"hourly_{day:%Y%m%d}_{stop:%Y%m%d}",
+                         lambda: wk_get(f"/api/v1/weather/en/{LAT}/{LON}", params),
+                         forever=_is_past(stop) if forever is None else forever)
+        parts.append(pd.DataFrame([{
+            "time": pd.Timestamp(h["forecastStart"]),
+            "cloud_cover": h.get("cloudCover"),
+            "rain_mm": h.get("precipitationAmount"),
+            "daylight": h.get("daylight"),
+            "condition": h.get("conditionCode"),
+        } for h in payload.get("forecastHourly", {}).get("hours", [])],
+            columns=["time", "cloud_cover", "rain_mm", "daylight", "condition"]))
+        day = stop + timedelta(days=1)
+    df = pd.concat(parts).drop_duplicates()
+    return df[~df["time"].duplicated(keep=False)].set_index("time").sort_index()
+
+
 def load_forecast_snapshots():
     """Every saved WeatherKit forecast, one row per (read, day), with the lead time in days."""
     parts = []
