@@ -9,7 +9,9 @@ What a run does, for each grid cell holding at least one plot:
      normals and the Stage A month table with gates.             → cells/<cell>/climate.json
   2. Recent NASA POWER rain: from the 1st of last month to today → drop months that fail the monthly check
      (against the normals and, when configured, WeatherKit) → checked daily rain and NASA P30.
-  3. P30 per plot (L5 data contract): WeatherKit history first, checked NASA POWER as the fallback.
+  3. P30 per plot (L5 data contract): WeatherKit history first, checked NASA POWER as the fallback. A 30-day window
+     with a missing day is never summed as 0 mm or patched from the other source; the record counts the missing
+     days per source (p30_missing_days).
      WeatherKit resolves about 10 km, so it is fetched per ~11 km plot area (0.1° box), not per NASA cell:
      4 requests per area per day, so 1,000 areas ≈ 120k of the 500k monthly calls.
                                                                   → cells/<cell>/latest.json
@@ -172,16 +174,27 @@ class WeatherKit:
         return r.json()
 
     def history(self, lat, lon, start, end):
-        """{date: mm} from past daily values, 10 days per request (Apple's limit)."""
-        rain, day = {}, start
+        """{date: mm or None} from past daily values, 10 days per request (Apple's limit).
+
+        A date returned twice is settled by rules.daily_from_pairs: kept if the values agree, missing if not. A request
+        that comes back short is logged; Apple has dropped the last day asked for (1 Jun 2023, every time we asked).
+        """
+        pairs, day = [], start
         while day <= end:
             stop = min(day + timedelta(days=9), end)
+            got = []
             for d in self.daily(lat, lon, day, stop).get("forecastDaily", {}).get("days", []):
                 local = datetime.fromisoformat(d["forecastStart"].replace("Z", "+00:00")).astimezone(self.tz).date()
-                if start <= local <= end and local not in rain:
-                    rain[local] = d.get("precipitationAmount")
+                if start <= local <= end:
+                    got.append((local, d.get("precipitationAmount")))
+            asked = [day + timedelta(days=i) for i in range((stop - day).days + 1)]
+            absent = sorted(set(asked) - {local for local, _ in got})
+            if absent:
+                log.warning("WeatherKit gave %d of %d days for %s, %s (%s to %s); missing %s", len(asked) - len(absent),
+                            len(asked), lat, lon, day, stop, ", ".join(d.isoformat() for d in absent))
+            pairs += got
             day = stop + timedelta(days=1)
-        return rain
+        return rules.daily_from_pairs(pairs)
 
 
 # ============================================================

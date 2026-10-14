@@ -5,6 +5,8 @@ one can be ported line by line and checked against the same cases in `tests/rule
 
 Conventions
 - Daily rain is a dict {date: mm}. A missing day is absent or None; it is never treated as 0 mm.
+- A date that arrives more than once counts once if its values agree, and as missing if they don't
+  (daily_from_pairs builds the dict that way from raw (date, mm) pairs).
 - A month is a (year, month) tuple.
 - Comparisons are strict where the rule says "over"/"under", exactly as written below.
 
@@ -39,9 +41,36 @@ def _present(daily):
     return {d: float(v) for d, v in (daily or {}).items() if v is not None}
 
 
+def daily_from_pairs(pairs):
+    """{date: mm or None} from raw (date, mm) pairs, one entry per date.
+
+    A date given more than once keeps its value when every value agrees, and becomes missing (None) when they
+    disagree: there is no telling which one is right. A None next to a value isn't a disagreement.
+    """
+    values = {}
+    for d, v in pairs:
+        values.setdefault(d, set())
+        if v is not None:
+            values[d].add(float(v))
+    return {d: (next(iter(v)) if len(v) == 1 else None) for d, v in sorted(values.items())}
+
+
 # ============================================================
 # L5 — P30 AND water_stress
 # ============================================================
+
+def missing_in_p30_window(daily):
+    """Days missing inside the 30-day window ending on the latest day with a value (all 30 if no day has one).
+
+    Missing days after that latest day aren't counted: they move the window back, and choose_p30's age limit
+    decides whether it is still recent enough.
+    """
+    rain = _present(daily)
+    if not rain:
+        return P30_WINDOW_DAYS
+    end = max(rain)
+    return sum(1 for i in range(P30_WINDOW_DAYS) if end - timedelta(days=i) not in rain)
+
 
 def compute_p30(daily, source):
     """P30 from one source: the 30 calendar days ending on the latest day with a value.
@@ -70,14 +99,17 @@ def choose_p30(sources, today, order=P30_SOURCE_ORDER, max_age_days=P30_MAX_AGE_
 
     `sources` maps a source name to its daily rain (NASA POWER already filtered by `suspect_months`).
     p30_quality is "ok" for the first source in the order, "fallback" for a later one, "none" if none qualifies;
-    with "none", p30_mm and water_stress are None (unknown), never a silent False.
+    with "none", p30_mm and water_stress are None (unknown), never a silent False. p30_missing_days gives, for every
+    source in the order, the days missing inside its latest 30-day window (missing_in_p30_window), so a gap that
+    sent P30 to the fallback shows in the record. A window is never completed from another source.
     """
+    missing = {name: missing_in_p30_window(sources.get(name)) for name in order}
     for rank, name in enumerate(order):
         record = compute_p30(sources.get(name), name)
         if record and (today - record["p30_end_date"]).days <= max_age_days:
-            return record | {"p30_quality": "ok" if rank == 0 else "fallback"}
+            return record | {"p30_quality": "ok" if rank == 0 else "fallback", "p30_missing_days": missing}
     return {"p30_mm": None, "p30_start_date": None, "p30_end_date": None,
-            "p30_source": None, "water_stress": None, "p30_quality": "none"}
+            "p30_source": None, "water_stress": None, "p30_quality": "none", "p30_missing_days": missing}
 
 
 # ============================================================

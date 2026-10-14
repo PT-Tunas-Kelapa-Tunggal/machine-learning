@@ -27,15 +27,15 @@ def to_month(s):
 
 
 def to_daily(enc):
-    """{start, values} (or a list of them) → {date: mm or None}."""
+    """{start, values} (or a list of them) → {date: mm or None}. Overlapping segments give a date twice, and
+    rules.daily_from_pairs settles it: once if the values agree, missing if they don't."""
     if enc is None:
         return None
-    daily = {}
+    pairs = []
     for seg in enc if isinstance(enc, list) else [enc]:
         start = to_date(seg["start"])
-        for i, v in enumerate(seg["values"]):
-            daily[start + timedelta(days=i)] = v
-    return daily
+        pairs += [(start + timedelta(days=i), v) for i, v in enumerate(seg["values"])]
+    return rules.daily_from_pairs(pairs)
 
 
 def to_table(avgs):
@@ -56,6 +56,10 @@ def encode(value):
 
 def run(case):
     f, x = case["function"], case["input"]
+    if f == "daily_from_pairs":
+        return rules.daily_from_pairs([(to_date(d), v) for d, v in x["pairs"]])
+    if f == "missing_in_p30_window":
+        return rules.missing_in_p30_window(to_daily(x["daily"]))
     if f == "compute_p30":
         return rules.compute_p30(to_daily(x["daily"]), x["source"])
     if f == "choose_p30":
@@ -107,8 +111,8 @@ class RuleCases(unittest.TestCase):
 
     def test_every_function_is_covered(self):
         covered = {c["function"] for c in CASES}
-        public = {"compute_p30", "choose_p30", "monthly_normals", "suspect_months", "drop_months",
-                  "month_table", "month_gate", "stage_b_day_pick", "l8_decision"}
+        public = {"daily_from_pairs", "missing_in_p30_window", "compute_p30", "choose_p30", "monthly_normals",
+                  "suspect_months", "drop_months", "month_table", "month_gate", "stage_b_day_pick", "l8_decision"}
         self.assertEqual(public - covered, set())
 
 

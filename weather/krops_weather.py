@@ -16,6 +16,8 @@ import pandas as pd
 import requests
 from dotenv import load_dotenv
 
+import krops_rules as rules
+
 HERE = Path(__file__).resolve().parent
 load_dotenv(HERE / ".env")
 
@@ -148,13 +150,18 @@ def tidy_weatherkit_days(payload):
 
 
 def fetch_weatherkit_history(start, end, chunk_days=10, forever=None):
-    """Past daily values (from 1 Aug 2021), 10 days per request. Model values, not observations."""
+    """Past daily values (from 1 Aug 2021), 10 days per request. Model values, not observations.
+
+    A date returned twice is kept once when both rows agree and dropped (missing) when they don't, as in
+    rules.daily_from_pairs: a duplicate must never let a 30-day window with a gap look complete.
+    """
     parts, day = [], start
     while day <= end:
         stop = min(day + timedelta(days=chunk_days - 1), end)
         parts.append(tidy_weatherkit_days(fetch_weatherkit_daily(day, stop, forever)))
         day = stop + timedelta(days=1)
-    df = pd.concat(parts).drop_duplicates("date").set_index("date").sort_index()
+    df = pd.concat(parts).drop_duplicates()
+    df = df[~df["date"].duplicated(keep=False)].set_index("date").sort_index()
     return df[(df.index >= start) & (df.index <= end)]
 
 
@@ -293,7 +300,9 @@ def load_rain_file(path, shift_days=0):
 
     keep = dates.notna() & rain.notna()
     days = (dates[keep] + pd.Timedelta(days=shift_days)).dt.date
-    return pd.Series(rain[keep].values, index=days.values, name="rain_mm").sort_index()
+    # A date listed twice counts once if the readings agree and is missing if they don't (rules.daily_from_pairs)
+    daily = rules.daily_from_pairs(zip(days.values, rain[keep].values))
+    return pd.Series({d: v for d, v in daily.items() if v is not None}, name="rain_mm", dtype=float).sort_index()
 
 
 def load_references():

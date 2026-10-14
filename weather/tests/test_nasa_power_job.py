@@ -6,9 +6,10 @@ import json
 import sys
 import tempfile
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from unittest import mock
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import nasa_power_job as job  # noqa: E402
@@ -168,7 +169,21 @@ class WeatherKitFirst(unittest.TestCase):
         self.assertEqual((l5["p30_source"], l5["p30_quality"], l5["p30_mm"]), ("weatherkit-history", "ok", 45.0))
         self.assertTrue(l5["water_stress"])
         self.assertEqual(l5["p30_end_date"], "2026-10-10")  # yesterday: today's value is still partly forecast
+        self.assertEqual(l5["p30_missing_days"], {"weatherkit-history": 0, "nasa-power": 0})
         self.assertIn("n0.900_e104.5000", snap["weatherkit_rain"])
+
+    def test_a_weatherkit_gap_falls_back_with_the_count(self):
+        class GappyWeatherKit(FakeWeatherKit):
+            def history(self, lat, lon, start, end):
+                rain = super().history(lat, lon, start, end)
+                rain.pop(date(2026, 9, 25), None)  # one day WeatherKit never returned, like 1 Jun 2023
+                return rain
+
+        l5 = self.run_job([{"plot_id": "a", "lat": 0.92, "lon": 104.45}], GappyWeatherKit(mm_per_day=2.05))["l5"]["a"]
+        # 29 × 2.05 = 59.45 mm: summing the gap as 0 would have raised a false water_stress
+        self.assertEqual((l5["p30_source"], l5["p30_quality"], l5["p30_mm"], l5["water_stress"]),
+                         ("nasa-power", "fallback", 90.0, False))
+        self.assertEqual(l5["p30_missing_days"], {"weatherkit-history": 1, "nasa-power": 0})
 
     def test_plots_in_one_area_share_one_weatherkit_fetch(self):
         wk = FakeWeatherKit(mm_per_day=3.0)
@@ -199,6 +214,45 @@ class WeatherKitFirst(unittest.TestCase):
         recent = job.build_recent(days(date(2026, 9, 1), [40.0] * 40), normals)  # NASA months all suspect
         l5 = job.build_l5([{"plot_id": "a", "area": "x"}], {"x": None}, recent, self.TODAY)["a"]
         self.assertEqual((l5["p30_quality"], l5["p30_mm"], l5["water_stress"]), ("none", None, None))
+
+
+class ScriptedWeatherKit(job.WeatherKit):
+    """The real history() over scripted daily() replies: no key, no network."""
+
+    def __init__(self, rain, drop=(), extra=()):
+        self.tz, self.calls = ZoneInfo("Asia/Jakarta"), 0
+        self.rain, self.drop, self.extra = rain, set(drop), list(extra)
+
+    def _day(self, d, mm):
+        start = datetime.combine(d, time(0), self.tz).astimezone(timezone.utc)  # local midnight, as Apple sends it
+        return {"forecastStart": start.strftime("%Y-%m-%dT%H:%M:%SZ"), "precipitationAmount": mm}
+
+    def daily(self, lat, lon, start=None, end=None):
+        asked = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+        days = [self._day(d, self.rain[d]) for d in asked if d not in self.drop]
+        days += [self._day(d, mm) for d, mm in self.extra if start <= d <= end]
+        return {"forecastDaily": {"days": days}}
+
+
+class WeatherKitHistory(unittest.TestCase):
+    START, END = date(2023, 5, 23), date(2023, 6, 11)  # two 10-day requests
+    RAIN = {date(2023, 5, 23) + timedelta(days=i): 5.0 for i in range(20)}
+
+    def test_a_short_reply_is_logged_and_the_day_stays_missing(self):
+        wk = ScriptedWeatherKit(self.RAIN, drop={date(2023, 6, 1)})  # the first request's last day, as Apple did
+        with self.assertLogs("nasa_power_job", level="WARNING") as logs:
+            got = wk.history(0.9, 104.5, self.START, self.END)
+        self.assertNotIn(date(2023, 6, 1), got)
+        self.assertEqual(len(got), 19)
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("9 of 10 days", logs.output[0])
+        self.assertIn("missing 2023-06-01", logs.output[0])
+
+    def test_a_date_returned_twice_counts_once_or_as_missing(self):
+        wk = ScriptedWeatherKit(self.RAIN, extra=[(date(2023, 5, 25), 5.0), (date(2023, 5, 26), 9.0)])
+        got = wk.history(0.9, 104.5, self.START, self.END)
+        self.assertEqual(got[date(2023, 5, 25)], 5.0)  # the same value twice: kept once
+        self.assertIsNone(got[date(2023, 5, 26)])      # two different values: missing, not either one
 
 
 class TrialCellRun(unittest.TestCase):

@@ -3,13 +3,232 @@
  "about": "Language-neutral test cases for weather/krops_rules.py. The Swift app runs the same cases.",
  "encoding": {
   "date": "ISO 8601 string, YYYY-MM-DD",
-  "daily rain": "{start, values}: values[i] is the mm for start + i days; null = missing day. A list of these = several segments.",
+  "daily rain": "{start, values}: values[i] is the mm for start + i days; null = missing day. A list of these = several segments. Segments may overlap: a date given twice counts once if the values agree, else as missing (daily_from_pairs).",
   "month": "YYYY-MM string",
   "table": "list of 12 month averages in mm, January first",
   "normals": "{\"1\".. \"12\": median mm}",
-  "floats": "compare with a tolerance of 1e-6"
+  "floats": "compare with a tolerance of 1e-6",
+  "pairs": "list of [YYYY-MM-DD, mm or null], in any order, dates may repeat"
  },
  "cases": [
+  {
+   "name": "pairs: a date given twice with the same value is kept once",
+   "function": "daily_from_pairs",
+   "input": {
+    "pairs": [
+     [
+      "2026-09-01",
+      2.0
+     ],
+     [
+      "2026-09-01",
+      2.0
+     ],
+     [
+      "2026-09-02",
+      1.0
+     ]
+    ]
+   },
+   "expected": {
+    "2026-09-01": 2.0,
+    "2026-09-02": 1.0
+   }
+  },
+  {
+   "name": "pairs: a date given twice with different values becomes missing",
+   "function": "daily_from_pairs",
+   "input": {
+    "pairs": [
+     [
+      "2026-09-01",
+      2.0
+     ],
+     [
+      "2026-09-01",
+      9.0
+     ],
+     [
+      "2026-09-02",
+      1.0
+     ]
+    ]
+   },
+   "expected": {
+    "2026-09-01": null,
+    "2026-09-02": 1.0
+   }
+  },
+  {
+   "name": "pairs: a null next to a value is not a disagreement",
+   "function": "daily_from_pairs",
+   "input": {
+    "pairs": [
+     [
+      "2026-09-01",
+      null
+     ],
+     [
+      "2026-09-01",
+      3.0
+     ],
+     [
+      "2026-09-02",
+      null
+     ]
+    ]
+   },
+   "expected": {
+    "2026-09-01": 3.0,
+    "2026-09-02": null
+   }
+  },
+  {
+   "name": "missing: a full window has none",
+   "function": "missing_in_p30_window",
+   "input": {
+    "daily": {
+     "start": "2026-09-09",
+     "values": [
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0
+     ]
+    }
+   },
+   "expected": 0
+  },
+  {
+   "name": "missing: a gap inside the window counts",
+   "function": "missing_in_p30_window",
+   "input": {
+    "daily": {
+     "start": "2026-09-09",
+     "values": [
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      null,
+      null,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0
+     ]
+    }
+   },
+   "expected": 2
+  },
+  {
+   "name": "missing: days after the last value move the window, they aren't counted",
+   "function": "missing_in_p30_window",
+   "input": {
+    "daily": {
+     "start": "2026-09-09",
+     "values": [
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      2.0,
+      null,
+      null,
+      null
+     ]
+    }
+   },
+   "expected": 0
+  },
+  {
+   "name": "missing: no value at all is the whole window",
+   "function": "missing_in_p30_window",
+   "input": {
+    "daily": {
+     "start": "2026-09-09",
+     "values": [
+      null,
+      null,
+      null,
+      null,
+      null
+     ]
+    }
+   },
+   "expected": 30
+  },
   {
    "name": "p30: exactly 60 mm is not water stress",
    "function": "compute_p30",
@@ -360,7 +579,11 @@
     "p30_end_date": "2026-10-08",
     "p30_source": "weatherkit-history",
     "water_stress": false,
-    "p30_quality": "ok"
+    "p30_quality": "ok",
+    "p30_missing_days": {
+     "weatherkit-history": 0,
+     "nasa-power": 0
+    }
    }
   },
   {
@@ -447,7 +670,11 @@
     "p30_end_date": "2026-10-08",
     "p30_source": "nasa-power",
     "water_stress": true,
-    "p30_quality": "fallback"
+    "p30_quality": "fallback",
+    "p30_missing_days": {
+     "weatherkit-history": 0,
+     "nasa-power": 0
+    }
    }
   },
   {
@@ -499,7 +726,11 @@
     "p30_end_date": "2026-10-04",
     "p30_source": "weatherkit-history",
     "water_stress": false,
-    "p30_quality": "ok"
+    "p30_quality": "ok",
+    "p30_missing_days": {
+     "weatherkit-history": 0,
+     "nasa-power": 30
+    }
    }
   },
   {
@@ -551,7 +782,11 @@
     "p30_end_date": null,
     "p30_source": null,
     "water_stress": null,
-    "p30_quality": "none"
+    "p30_quality": "none",
+    "p30_missing_days": {
+     "weatherkit-history": 30,
+     "nasa-power": 1
+    }
    }
   },
   {
@@ -642,7 +877,734 @@
     "p30_end_date": "2026-10-08",
     "p30_source": "nasa-power",
     "water_stress": true,
-    "p30_quality": "ok"
+    "p30_quality": "ok",
+    "p30_missing_days": {
+     "nasa-power": 0,
+     "weatherkit-history": 0
+    }
+   }
+  },
+  {
+   "name": "choose: a missing day mid-window is never 0 mm; P30 falls back to NASA POWER",
+   "function": "choose_p30",
+   "input": {
+    "today": "2026-10-11",
+    "sources": {
+     "weatherkit-history": {
+      "start": "2026-09-01",
+      "values": [
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       null,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05
+      ]
+     },
+     "nasa-power": {
+      "start": "2026-09-09",
+      "values": [
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0
+      ]
+     }
+    }
+   },
+   "expected": {
+    "p30_mm": 90.0,
+    "p30_start_date": "2026-09-09",
+    "p30_end_date": "2026-10-08",
+    "p30_source": "nasa-power",
+    "water_stress": false,
+    "p30_quality": "fallback",
+    "p30_missing_days": {
+     "weatherkit-history": 1,
+     "nasa-power": 0
+    }
+   }
+  },
+  {
+   "name": "choose: a missing first day of the window is a gap too",
+   "function": "choose_p30",
+   "input": {
+    "today": "2026-10-11",
+    "sources": {
+     "weatherkit-history": {
+      "start": "2026-09-01",
+      "values": [
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       null,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05
+      ]
+     },
+     "nasa-power": {
+      "start": "2026-09-09",
+      "values": [
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0
+      ]
+     }
+    }
+   },
+   "expected": {
+    "p30_mm": 90.0,
+    "p30_start_date": "2026-09-09",
+    "p30_end_date": "2026-10-08",
+    "p30_source": "nasa-power",
+    "water_stress": false,
+    "p30_quality": "fallback",
+    "p30_missing_days": {
+     "weatherkit-history": 1,
+     "nasa-power": 0
+    }
+   }
+  },
+  {
+   "name": "choose: a missing last day moves the window back a day, still WeatherKit",
+   "function": "choose_p30",
+   "input": {
+    "today": "2026-10-11",
+    "sources": {
+     "weatherkit-history": {
+      "start": "2026-09-01",
+      "values": [
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       null
+      ]
+     },
+     "nasa-power": {
+      "start": "2026-09-09",
+      "values": [
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0
+      ]
+     }
+    }
+   },
+   "expected": {
+    "p30_mm": 61.5,
+    "p30_start_date": "2026-09-10",
+    "p30_end_date": "2026-10-09",
+    "p30_source": "weatherkit-history",
+    "water_stress": false,
+    "p30_quality": "ok",
+    "p30_missing_days": {
+     "weatherkit-history": 0,
+     "nasa-power": 0
+    }
+   }
+  },
+  {
+   "name": "choose: a date given twice with different values counts as missing",
+   "function": "choose_p30",
+   "input": {
+    "today": "2026-10-11",
+    "sources": {
+     "weatherkit-history": [
+      {
+       "start": "2026-09-01",
+       "values": [
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05
+       ]
+      },
+      {
+       "start": "2026-09-25",
+       "values": [
+        9.0
+       ]
+      }
+     ],
+     "nasa-power": {
+      "start": "2026-09-09",
+      "values": [
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0
+      ]
+     }
+    }
+   },
+   "expected": {
+    "p30_mm": 90.0,
+    "p30_start_date": "2026-09-09",
+    "p30_end_date": "2026-10-08",
+    "p30_source": "nasa-power",
+    "water_stress": false,
+    "p30_quality": "fallback",
+    "p30_missing_days": {
+     "weatherkit-history": 1,
+     "nasa-power": 0
+    }
+   }
+  },
+  {
+   "name": "choose: a date given twice with the same value counts once",
+   "function": "choose_p30",
+   "input": {
+    "today": "2026-10-11",
+    "sources": {
+     "weatherkit-history": [
+      {
+       "start": "2026-09-01",
+       "values": [
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05,
+        2.05
+       ]
+      },
+      {
+       "start": "2026-09-25",
+       "values": [
+        2.05
+       ]
+      }
+     ],
+     "nasa-power": {
+      "start": "2026-09-09",
+      "values": [
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0
+      ]
+     }
+    }
+   },
+   "expected": {
+    "p30_mm": 61.5,
+    "p30_start_date": "2026-09-11",
+    "p30_end_date": "2026-10-10",
+    "p30_source": "weatherkit-history",
+    "water_stress": false,
+    "p30_quality": "ok",
+    "p30_missing_days": {
+     "weatherkit-history": 0,
+     "nasa-power": 0
+    }
+   }
+  },
+  {
+   "name": "choose: a gap in both sources gives unknown, never false",
+   "function": "choose_p30",
+   "input": {
+    "today": "2026-10-11",
+    "sources": {
+     "weatherkit-history": {
+      "start": "2026-09-01",
+      "values": [
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       null,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05,
+       2.05
+      ]
+     },
+     "nasa-power": {
+      "start": "2026-09-09",
+      "values": [
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       null,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0,
+       3.0
+      ]
+     }
+    }
+   },
+   "expected": {
+    "p30_mm": null,
+    "p30_start_date": null,
+    "p30_end_date": null,
+    "p30_source": null,
+    "water_stress": null,
+    "p30_quality": "none",
+    "p30_missing_days": {
+     "weatherkit-history": 1,
+     "nasa-power": 1
+    }
+   }
+  },
+  {
+   "name": "choose: every day missing in both sources gives unknown",
+   "function": "choose_p30",
+   "input": {
+    "today": "2026-10-11",
+    "sources": {
+     "weatherkit-history": {
+      "start": "2026-09-01",
+      "values": [
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null
+      ]
+     },
+     "nasa-power": {
+      "start": "2026-09-09",
+      "values": [
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       null
+      ]
+     }
+    }
+   },
+   "expected": {
+    "p30_mm": null,
+    "p30_start_date": null,
+    "p30_end_date": null,
+    "p30_source": null,
+    "water_stress": null,
+    "p30_quality": "none",
+    "p30_missing_days": {
+     "weatherkit-history": 30,
+     "nasa-power": 30
+    }
    }
   },
   {
