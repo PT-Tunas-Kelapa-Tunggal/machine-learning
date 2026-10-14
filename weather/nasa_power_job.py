@@ -12,8 +12,11 @@ What a run does, for each grid cell holding at least one plot:
   3. P30 per plot (L5 data contract): WeatherKit history first, checked NASA POWER as the fallback. A 30-day window
      with a missing day is never summed as 0 mm or patched from the other source; the record counts the missing
      days per source (p30_missing_days).
-     WeatherKit resolves about 10 km, so it is fetched per ~11 km plot area (0.1° box), not per NASA cell:
-     4 requests per area per day, so 1,000 areas ≈ 120k of the 500k monthly calls.
+     WeatherKit resolves about 10 km, so it is fetched per ~11 km plot area (0.1° box), not per NASA cell. A reply
+     that comes back short is re-requested once per gap, with the gap mid-range (WeatherKit.history).
+     Quota (weatherkit_calls_per_month): 4 requests per area and 5–8 per cell (the monthly check) a day, plus
+     retries (~0.5%) and archived forecasts. 1,000 areas: about 126–129k a month if they share 34 cells, 136–145k
+     in 100 cells, 271–362k if every area is its own cell, of the 500k included.
                                                                   → cells/<cell>/latest.json
   4. Backend-only QA log (the app never downloads it, so phones on a weak signal don't pay for it):
      `irradiance_check`, NASA POWER's daily sunlight checked against ALLSKY ≤ CLRSKY ≤ Ra over the last
@@ -67,6 +70,9 @@ GRID_LAT, GRID_LON = 0.5, 0.625  # NASA POWER rain grid (MERRA-2)
 WK_AREA = 0.1                    # WeatherKit P30 area, about 11 km: WeatherKit resolves about 10 km
 WK_P30_DAYS = 37                 # 30-day window plus the 7 days P30 may lag behind (rules.P30_MAX_AGE_DAYS)
 QA_LOOKBACK_DAYS = 120  # GUESS – no source yet: CLRSKY ran ~73 days behind on 11 Oct 2026; 120 leaves ~45 days to check
+RECENT_LOOKBACK_DAYS = 45        # recent rain starts on the 1st of the month holding today − 45: last month is whole
+NASA_LAG_DAYS = 3                # NASA POWER rain runs this far behind (observed, notebook 1); for the quota estimate only
+SHORT_REPLY_RATE = 3 / 592       # WeatherKit replies seen short so far (Oct 2026); each gap costs one retry
 
 
 # ============================================================
@@ -100,6 +106,17 @@ def group_plots(plots):
         cell = grid_cell(float(plot["lat"]), float(plot["lon"]))
         cells.setdefault(cell["id"], cell | {"plots": []})["plots"].append(plot["plot_id"])
     return cells
+
+
+def _spans(days):
+    """Runs of consecutive dates: [d1, d2, d3, d7] → [(d1, d3), (d7, d7)]."""
+    spans = []
+    for d in sorted(days):
+        if spans and d == spans[-1][1] + timedelta(days=1):
+            spans[-1] = (spans[-1][0], d)
+        else:
+            spans.append((d, d))
+    return spans
 
 
 # ============================================================
@@ -139,6 +156,8 @@ class WeatherKit:
     """Minimal WeatherKit REST client: daily values only. Server-side only, the .p8 key never ships in the app."""
 
     BASE = "https://weatherkit.apple.com"
+    MAX_DAYS = 10  # days per daily request (Apple's limit)
+    retries = 0    # re-requests for short replies this run
 
     def __init__(self, team_id, key_id, service_id, key_path, session, tz):
         self.team_id, self.key_id, self.service_id = team_id, key_id, service_id
@@ -174,25 +193,56 @@ class WeatherKit:
         r.raise_for_status()
         return r.json()
 
+    def _days(self, lat, lon, first, last, start, end):
+        """(local date, mm) for the days one request for first–last returns, kept when they fall inside start–end."""
+        got = []
+        for d in self.daily(lat, lon, first, last).get("forecastDaily", {}).get("days", []):
+            local = datetime.fromisoformat(d["forecastStart"].replace("Z", "+00:00")).astimezone(self.tz).date()
+            if start <= local <= end:
+                got.append((local, d.get("precipitationAmount")))
+        return got
+
+    def _retry(self, lat, lon, first, last, start, end, before):
+        """One more request for the missing days first–last, with the gap in the middle of the range.
+
+        Apple has dropped the last day of a request (1 Jun 2023, every time) yet returns it from a range where it isn't
+        the last day. Returns what the retry gave inside start–end; `before` (the replies so far) is only for the log.
+        """
+        spare = self.MAX_DAYS - ((last - first).days + 1)
+        ask_first, ask_last = first - timedelta(days=spare // 2), last + timedelta(days=spare - spare // 2)
+        self.retries += 1
+        try:
+            got = self._days(lat, lon, ask_first, ask_last, start, end)
+        except Exception:
+            log.warning("WeatherKit retry %s to %s failed; %s to %s stay missing", ask_first, ask_last, first, last,
+                        exc_info=True)
+            return []
+        wanted = {first + timedelta(days=i) for i in range((last - first).days + 1)}
+        recovered = sorted({d for d, v in got if d in wanted and v is not None})
+        earlier = dict(before)
+        disagree = sorted({d for d, v in got if d in earlier and earlier[d] != v})
+        log.warning("WeatherKit retry %s to %s for %s to %s: recovered %d of %d day(s)%s%s", ask_first, ask_last, first,
+                    last, len(recovered), len(wanted), f" ({', '.join(d.isoformat() for d in recovered)})" if recovered else "",
+                    f"; {len(disagree)} day(s) disagree with an earlier reply and count as missing" if disagree else "")
+        return got
+
     def history(self, lat, lon, start, end):
         """{date: mm or None} from past daily values, 10 days per request (Apple's limit).
 
-        A date returned twice is settled by rules.daily_from_pairs: kept if the values agree, missing if not. A request
-        that comes back short is logged; Apple has dropped the last day asked for (1 Jun 2023, every time we asked).
+        A request that comes back short is logged and retried once per gap (see _retry). Everything WeatherKit returns
+        goes through rules.daily_from_pairs: a date given twice counts once if the values agree, and as missing if not.
         """
         pairs, day = [], start
         while day <= end:
-            stop = min(day + timedelta(days=9), end)
-            got = []
-            for d in self.daily(lat, lon, day, stop).get("forecastDaily", {}).get("days", []):
-                local = datetime.fromisoformat(d["forecastStart"].replace("Z", "+00:00")).astimezone(self.tz).date()
-                if start <= local <= end:
-                    got.append((local, d.get("precipitationAmount")))
+            stop = min(day + timedelta(days=self.MAX_DAYS - 1), end)
+            got = self._days(lat, lon, day, stop, start, end)
             asked = [day + timedelta(days=i) for i in range((stop - day).days + 1)]
             absent = sorted(set(asked) - {local for local, _ in got})
             if absent:
                 log.warning("WeatherKit gave %d of %d days for %s, %s (%s to %s); missing %s", len(asked) - len(absent),
                             len(asked), lat, lon, day, stop, ", ".join(d.isoformat() for d in absent))
+            for first, last in _spans(absent):
+                got += self._retry(lat, lon, first, last, start, end, before=got)
             pairs += got
             day = stop + timedelta(days=1)
         return rules.daily_from_pairs(pairs)
@@ -319,6 +369,19 @@ def check_cell_irradiance(values, cell):
         return None
 
 
+def weatherkit_calls_per_month(areas, cells, archived_plots=0, days=30):
+    """(low, high) WeatherKit requests per month for the job, everything included.
+
+    Per day: P30 history per area (WK_P30_DAYS, 10 days a request); the monthly check per cell, from the 1st of the
+    month holding today − RECENT_LOOKBACK_DAYS to NASA POWER's last day (43–73 days, so 5–8 requests); one forecast
+    per archived plot; and retries for short replies at the rate seen so far.
+    """
+    per_area = math.ceil(WK_P30_DAYS / WeatherKit.MAX_DAYS)
+    shortest, longest = RECENT_LOOKBACK_DAYS - NASA_LAG_DAYS + 1, RECENT_LOOKBACK_DAYS - NASA_LAG_DAYS + 31
+    per_cell = (math.ceil(shortest / WeatherKit.MAX_DAYS), math.ceil(longest / WeatherKit.MAX_DAYS))
+    return tuple(round(days * (areas * per_area + cells * c + archived_plots) * (1 + SHORT_REPLY_RATE)) for c in per_cell)
+
+
 def fetch_area_rain(weatherkit, area, today):
     """WeatherKit daily rain for one area over the last WK_P30_DAYS, ending yesterday; None if unavailable."""
     if weatherkit is None:
@@ -350,7 +413,7 @@ def run(plots, out, today, *, session, weatherkit=None, refresh_climate=False, a
                 write_json(climate_path, climate)
                 log.info("%s: climate table rebuilt", cell["id"])
 
-            start = (today - timedelta(days=45)).replace(day=1)  # the whole of last month, so its check is fair
+            start = (today - timedelta(days=RECENT_LOOKBACK_DAYS)).replace(day=1)  # all of last month: a fair check
             qa_start = min(start, today - timedelta(days=QA_LOOKBACK_DAYS))  # one request, reaching back for CLRSKY
             fetched, units, sources = fetch(cell["lat"], cell["lon"], qa_start, today, RECENT_PARAMS, session)
             values = {p: {d: v for d, v in series.items() if d >= start} for p, series in fetched.items()}  # as before
@@ -437,7 +500,7 @@ def main(argv=None):
     failed = run(plots, args.out, today, session=session, weatherkit=weatherkit,
                  refresh_climate=args.refresh_climate, archive_forecast=args.archive_forecast)
     if weatherkit:
-        log.info("WeatherKit requests this run: %d", weatherkit.calls)
+        log.info("WeatherKit requests this run: %d (%d retries for short replies)", weatherkit.calls, weatherkit.retries)
     return 1 if failed else 0
 
 

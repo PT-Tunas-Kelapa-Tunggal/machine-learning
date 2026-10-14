@@ -216,41 +216,116 @@ class WeatherKitFirst(unittest.TestCase):
         self.assertEqual((l5["p30_quality"], l5["p30_mm"], l5["water_stress"]), ("none", None, None))
 
 
-class ScriptedWeatherKit(job.WeatherKit):
-    """The real history() over scripted daily() replies: no key, no network."""
+FIXTURE = json.loads((Path(__file__).with_name("fixtures") / "weatherkit_2023-06-01_gap.json").read_text())
 
-    def __init__(self, rain, drop=(), extra=()):
-        self.tz, self.calls = ZoneInfo("Asia/Jakarta"), 0
-        self.rain, self.drop, self.extra = rain, set(drop), list(extra)
+
+class RecordedWeatherKit(job.WeatherKit):
+    """The real history() over WeatherKit replies recorded for 23 May-11 Jun 2023; any other request fails."""
+
+    def __init__(self):
+        self.tz, self.asked = ZoneInfo("Asia/Jakarta"), []
+        self.replies = {(r["dailyStart"], r["dailyEnd"]): r["days"] for r in FIXTURE["replies"]}
+
+    def daily(self, lat, lon, start=None, end=None):
+        key = (start.isoformat(), end.isoformat())
+        self.asked.append(key)
+        if key not in self.replies:
+            raise AssertionError(f"no recorded reply for {key}")
+        return {"forecastDaily": {"days": self.replies[key]}}
+
+
+class WeatherKitRetry(unittest.TestCase):
+    """A short reply is re-requested once per gap, with the gap in the middle of the range (recorded replies)."""
+
+    def test_the_recorded_gap_is_recovered_by_one_centred_retry(self):
+        wk = RecordedWeatherKit()
+        with self.assertLogs("nasa_power_job", level="WARNING") as logs:
+            got = wk.history(0.0, 0.0, date(2023, 5, 23), date(2023, 6, 1))
+        self.assertEqual(wk.asked, [("2023-05-23", "2023-06-01"), ("2023-05-28", "2023-06-06")])
+        self.assertEqual((wk.retries, len(got), got[date(2023, 6, 1)]), (1, 10, 30.98))
+        self.assertIn("missing 2023-06-01", logs.output[0])
+        self.assertIn("recovered 1 of 1 day(s) (2023-06-01)", logs.output[1])
+
+    def test_days_the_retry_repeats_count_once(self):
+        wk = RecordedWeatherKit()
+        with self.assertLogs("nasa_power_job", level="WARNING"):
+            got = wk.history(0.0, 0.0, date(2023, 5, 23), date(2023, 6, 11))
+        self.assertEqual(wk.asked, [("2023-05-23", "2023-06-01"), ("2023-05-28", "2023-06-06"), ("2023-06-02", "2023-06-11")])
+        self.assertEqual(len(got), 20)
+        self.assertTrue(all(v is not None for v in got.values()))  # 28 May-6 Jun came twice and agreed
+
+    def test_the_quota_estimate_counts_cells_and_retries(self):
+        self.assertEqual(job.weatherkit_calls_per_month(1, 0, days=1), (4, 4))  # 37 days of P30 history, 10 a request
+        self.assertEqual(job.weatherkit_calls_per_month(0, 1, days=1), (5, 8))  # the per-cell check: 43-73 days
+        low, high = job.weatherkit_calls_per_month(1000, 1000)
+        self.assertGreater(low, 1000 * 4 * 30 + 1000 * 5 * 30)                 # retries on top of areas and cells
+        self.assertLess(high, 500_000)
+
+    def test_spans_group_consecutive_days(self):
+        d = date(2023, 6, 1)
+        days = [d, d + timedelta(days=1), d + timedelta(days=2), d + timedelta(days=6)]
+        self.assertEqual(job._spans(days), [(d, d + timedelta(days=2)), (d + timedelta(days=6), d + timedelta(days=6))])
+        self.assertEqual(job._spans([]), [])
+
+
+class ScriptedWeatherKit(job.WeatherKit):
+    """The real history() over scripted daily() replies: no key, no network.
+
+    `drop`: days never returned. `extra`: (day, mm) returned again in any request covering it. `later`: values that
+    every request after the first returns instead. `fail_on`: numbers of the requests (1 = first) that raise."""
+
+    def __init__(self, rain, drop=(), extra=(), later=None, fail_on=()):
+        self.tz, self.asked = ZoneInfo("Asia/Jakarta"), []
+        self.rain, self.drop, self.extra, self.later, self.fail_on = rain, set(drop), list(extra), later or {}, set(fail_on)
 
     def _day(self, d, mm):
         start = datetime.combine(d, time(0), self.tz).astimezone(timezone.utc)  # local midnight, as Apple sends it
         return {"forecastStart": start.strftime("%Y-%m-%dT%H:%M:%SZ"), "precipitationAmount": mm}
 
     def daily(self, lat, lon, start=None, end=None):
+        self.asked.append((start, end))
+        if len(self.asked) in self.fail_on:
+            raise ConnectionError("weatherkit.apple.com unreachable")
+        values = self.rain | (self.later if len(self.asked) > 1 else {})
         asked = [start + timedelta(days=i) for i in range((end - start).days + 1)]
-        days = [self._day(d, self.rain[d]) for d in asked if d not in self.drop]
+        days = [self._day(d, values[d]) for d in asked if d in values and d not in self.drop]
         days += [self._day(d, mm) for d, mm in self.extra if start <= d <= end]
         return {"forecastDaily": {"days": days}}
 
 
 class WeatherKitHistory(unittest.TestCase):
     START, END = date(2023, 5, 23), date(2023, 6, 11)  # two 10-day requests
-    RAIN = {date(2023, 5, 23) + timedelta(days=i): 5.0 for i in range(20)}
+    RAIN = {date(2023, 5, 23) + timedelta(days=i): 5.0 for i in range(25)}
 
-    def test_a_short_reply_is_logged_and_the_day_stays_missing(self):
-        wk = ScriptedWeatherKit(self.RAIN, drop={date(2023, 6, 1)})  # the first request's last day, as Apple did
+    def test_a_day_missing_from_every_reply_is_retried_once_then_stays_missing(self):
+        wk = ScriptedWeatherKit(self.RAIN, drop={date(2023, 6, 1)})
         with self.assertLogs("nasa_power_job", level="WARNING") as logs:
-            got = wk.history(0.9, 104.5, self.START, self.END)
+            got = wk.history(0.0, 0.0, self.START, self.END)
+        self.assertEqual((wk.retries, len(wk.asked)), (1, 3))
         self.assertNotIn(date(2023, 6, 1), got)
         self.assertEqual(len(got), 19)
-        self.assertEqual(len(logs.output), 1)
         self.assertIn("9 of 10 days", logs.output[0])
-        self.assertIn("missing 2023-06-01", logs.output[0])
+        self.assertIn("recovered 0 of 1", logs.output[1])
+
+    def test_a_retry_that_disagrees_makes_that_day_missing(self):
+        wk = ScriptedWeatherKit(self.RAIN, drop={date(2023, 6, 1)}, later={date(2023, 5, 29): 9.0})
+        with self.assertLogs("nasa_power_job", level="WARNING") as logs:
+            got = wk.history(0.0, 0.0, self.START, self.END)
+        self.assertIsNone(got[date(2023, 5, 29)])  # 5.0 first, 9.0 on the retry: no telling which is right
+        self.assertIn("1 day(s) disagree", logs.output[1])
+
+    def test_a_failing_retry_leaves_the_gap_and_keeps_the_rest(self):
+        wk = ScriptedWeatherKit(self.RAIN, drop={date(2023, 6, 1)}, fail_on={2})  # request 2 is the retry
+        with self.assertLogs("nasa_power_job", level="WARNING") as logs:
+            got = wk.history(0.0, 0.0, self.START, self.END)
+        self.assertEqual((len(wk.asked), len(got)), (3, 19))
+        self.assertNotIn(date(2023, 6, 1), got)
+        self.assertIn("retry 2023-05-28 to 2023-06-06 failed", "\n".join(logs.output))
 
     def test_a_date_returned_twice_counts_once_or_as_missing(self):
         wk = ScriptedWeatherKit(self.RAIN, extra=[(date(2023, 5, 25), 5.0), (date(2023, 5, 26), 9.0)])
-        got = wk.history(0.9, 104.5, self.START, self.END)
+        got = wk.history(0.0, 0.0, self.START, self.END)
+        self.assertEqual(wk.retries, 0)
         self.assertEqual(got[date(2023, 5, 25)], 5.0)  # the same value twice: kept once
         self.assertIsNone(got[date(2023, 5, 26)])      # two different values: missing, not either one
 
