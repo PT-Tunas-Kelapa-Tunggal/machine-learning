@@ -1,16 +1,20 @@
-"""NASA POWER job: per grid cell, the Stage A climate table (yearly) and checked recent rain (daily), as JSON.
+"""NASA POWER job: per grid cell, the Stage A climate table (yearly), checked recent rain and each plot's P30 (daily).
 
 The app downloads its cell's `latest.json` at sync and runs the L5/L8 rules offline from it. One NASA
-POWER request per grid cell per run, shared by every plot in that cell, as NASA asks.
+POWER request per grid cell per run, shared by every plot in that cell, as NASA asks. Despite the name,
+the job also fetches the WeatherKit rain that P30 now uses first.
 
 What a run does, for each grid cell holding at least one plot:
   1. Climate (when missing, older than a year, or with --refresh-climate): 1991–2020 daily rain → monthly
      normals and the Stage A month table with gates.             → cells/<cell>/climate.json
-  2. Recent rain: from the 1st of last month to today → drop months that fail the monthly check
+  2. Recent NASA POWER rain: from the 1st of last month to today → drop months that fail the monthly check
      (against the normals and, when configured, WeatherKit) → checked daily rain and NASA P30.
+  3. P30 per plot (L5 data contract): WeatherKit history first, checked NASA POWER as the fallback.
+     WeatherKit resolves about 10 km, so it is fetched per ~11 km plot area (0.1° box), not per NASA cell:
+     4 requests per area per day, so 1,000 areas ≈ 120k of the 500k monthly calls.
                                                                   → cells/<cell>/latest.json
-  3. Index of plot → cell file.                                   → plots.json
-  4. Optional (--archive-forecast): today's WeatherKit forecast for plots marked "archive_forecast",
+  4. Index of plot → cell file and WeatherKit area.               → plots.json
+  5. Optional (--archive-forecast): today's WeatherKit forecast for plots marked "archive_forecast",
      kept for scoring forecasts against BMKG data later.         → archive/forecast/<plot>/<date>.json
 
 Usage:
@@ -41,12 +45,14 @@ import krops_rules as rules
 HERE = Path(__file__).resolve().parent
 log = logging.getLogger("nasa_power_job")
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 POWER_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
 RAIN = "PRECTOTCORR"
 SUN = "ALLSKY_SFC_SW_DWN"  # logged only (design doc), no rule reads it
 CLIMATE_MAX_AGE_DAYS = 365
 GRID_LAT, GRID_LON = 0.5, 0.625  # NASA POWER rain grid (MERRA-2)
+WK_AREA = 0.1                    # WeatherKit P30 area, about 11 km: WeatherKit resolves about 10 km
+WK_P30_DAYS = 37                 # 30-day window plus the 7 days P30 may lag behind (rules.P30_MAX_AGE_DAYS)
 
 
 # ============================================================
@@ -57,11 +63,20 @@ def _snap(value, step, offset=0.0):
     return math.floor((value + offset) / step + 0.5) * step - offset  # round half up, the same in Swift
 
 
+def _place_id(lat, lon):
+    return f"{'n' if lat >= 0 else 's'}{abs(lat):.3f}_{'e' if lon >= 0 else 'w'}{abs(lon):.4f}"
+
+
 def grid_cell(lat, lon):
     """The rain grid cell holding a point: its centre (where we query NASA POWER) and a stable id."""
     clat, clon = _snap(lat, GRID_LAT), _snap(lon, GRID_LON, 180.0)
-    cell_id = f"{'n' if clat >= 0 else 's'}{abs(clat):.3f}_{'e' if clon >= 0 else 'w'}{abs(clon):.4f}"
-    return {"id": cell_id, "lat": round(clat, 4), "lon": round(clon, 4)}
+    return {"id": _place_id(clat, clon), "lat": round(clat, 4), "lon": round(clon, 4)}
+
+
+def weatherkit_area(lat, lon):
+    """The ~11 km box (0.1°) whose centre we query WeatherKit at for P30; plots in one box share it."""
+    clat, clon = _snap(lat, WK_AREA), _snap(lon, WK_AREA)
+    return {"id": _place_id(clat, clon), "lat": round(clat, 4), "lon": round(clon, 4)}
 
 
 def group_plots(plots):
@@ -115,6 +130,7 @@ class WeatherKit:
         self.team_id, self.key_id, self.service_id = team_id, key_id, service_id
         self.key = Path(key_path).expanduser().read_text()
         self.session, self.tz = session, tz
+        self.calls = 0
 
     @classmethod
     def from_env(cls, session, tz):
@@ -140,6 +156,7 @@ class WeatherKit:
             params |= {"dailyStart": self._utc(start), "dailyEnd": self._utc(end + timedelta(days=1))}
         r = self.session.get(f"{self.BASE}/api/v1/weather/en/{lat}/{lon}", params=params,
                              headers={"Authorization": f"Bearer {self._token()}"}, timeout=30)
+        self.calls += 1
         r.raise_for_status()
         return r.json()
 
@@ -176,29 +193,49 @@ def build_climate(rain, today, period=rules.NORMAL_PERIOD):
     }
 
 
+def _iso_record(record):
+    """A P30 record with its dates as ISO strings (None stays None)."""
+    if record is None:
+        return None
+    return record | {k: (record[k].isoformat() if record[k] else None) for k in ("p30_start_date", "p30_end_date")}
+
+
 def build_recent(rain, normals_mm, weatherkit_rain=None):
-    """Checked recent rain: suspect months dropped, plus the NASA POWER P30 from what is left."""
+    """Checked recent NASA POWER rain: suspect months dropped, plus the NASA-only P30 from what is left."""
     normals = {int(m): v for m, v in normals_mm.items()}
     present = {d: v for d, v in rain.items() if v is not None}
     suspect = rules.suspect_months(present, normals, weatherkit_rain)
     checked = rules.drop_months(present, suspect)
-    p30 = rules.compute_p30(checked, "nasa-power")
     return {
         "last_day": max(present).isoformat() if present else None,
         "checked_against": "normals and weatherkit" if weatherkit_rain else "normals",
         "suspect_months": [f"{y}-{m:02d}" for y, m in sorted(suspect)],
         "rain_mm": {d.isoformat(): v for d, v in sorted(checked.items())},
-        "p30": None if p30 is None else p30 | {"p30_start_date": p30["p30_start_date"].isoformat(),
-                                              "p30_end_date": p30["p30_end_date"].isoformat()},
+        "nasa_p30": _iso_record(rules.compute_p30(checked, "nasa-power")),
     }
 
 
-def build_snapshot(cell, climate, recent, irradiance, units, sources, generated_at):
+def build_l5(plots, area_rain, recent, today):
+    """The L5 data contract per plot: WeatherKit history for its area first, checked NASA POWER as the fallback.
+
+    `plots` = [{plot_id, area}], `area_rain` = {area id: {date: mm} or None}, `recent` = build_recent's output.
+    """
+    nasa_checked = {date.fromisoformat(d): v for d, v in recent["rain_mm"].items()}
+    out = {}
+    for plot in plots:
+        sources = {"weatherkit-history": area_rain.get(plot["area"]), "nasa-power": nasa_checked}
+        out[plot["plot_id"]] = _iso_record(rules.choose_p30(sources, today)) | {"weatherkit_area": plot["area"]}
+    return out
+
+
+def build_snapshot(cell, climate, recent, l5, areas, irradiance, units, sources, generated_at):
     return {
         "schema": SCHEMA_VERSION,
         "generated_at": generated_at,
         "cell": {"id": cell["id"], "lat": cell["lat"], "lon": cell["lon"], "plots": cell["plots"]},
         "climate": climate,
+        "l5": l5,
+        "weatherkit_rain": areas,
         "recent_rain": recent,
         "irradiance": {"param": SUN, "unit": units.get(SUN),
                        "days": {d.isoformat(): v for d, v in sorted(irradiance.items()) if v is not None}},
@@ -225,12 +262,25 @@ def load_climate(path, today):
     return climate if age <= CLIMATE_MAX_AGE_DAYS else None
 
 
+def fetch_area_rain(weatherkit, area, today):
+    """WeatherKit daily rain for one area over the last WK_P30_DAYS, ending yesterday; None if unavailable."""
+    if weatherkit is None:
+        return None
+    try:
+        return weatherkit.history(area["lat"], area["lon"], today - timedelta(days=WK_P30_DAYS), today - timedelta(days=1))
+    except Exception:
+        log.warning("%s: WeatherKit history failed; P30 falls back to NASA POWER", area["id"], exc_info=True)
+        return None
+
+
 def run(plots, out, today, *, session, weatherkit=None, refresh_climate=False, archive_forecast=False,
         fetch=fetch_nasa_power):
     """Process every cell; returns the number of cells that failed."""
     out = Path(out)
     cells = group_plots(plots)
+    plot_area = {p["plot_id"]: weatherkit_area(float(p["lat"]), float(p["lon"])) for p in plots}
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    area_rain = {}  # area id → {date: mm} or None; shared across cells, fetched once per run
     failed = 0
     for cell in cells.values():
         try:
@@ -248,18 +298,34 @@ def run(plots, out, today, *, session, weatherkit=None, refresh_climate=False, a
             present = [d for d, v in values[RAIN].items() if v is not None]
             wk_rain = None
             if weatherkit and present:
-                wk_rain = weatherkit.history(cell["lat"], cell["lon"], start, max(present))
+                try:
+                    wk_rain = weatherkit.history(cell["lat"], cell["lon"], start, max(present))
+                except Exception:
+                    log.warning("%s: WeatherKit unavailable; checking NASA POWER against the normals only",
+                                cell["id"], exc_info=True)
             recent = build_recent(values[RAIN], climate["normals_mm"], wk_rain)
-            snapshot = build_snapshot(cell, climate, recent, values.get(SUN, {}), units, sources, generated_at)
+
+            areas = {}
+            for plot_id in cell["plots"]:
+                area = plot_area[plot_id]
+                if area["id"] not in area_rain:
+                    area_rain[area["id"]] = fetch_area_rain(weatherkit, area, today)
+                if area_rain[area["id"]] is not None:
+                    areas[area["id"]] = {"lat": area["lat"], "lon": area["lon"],
+                                         "rain_mm": {d.isoformat(): v for d, v in sorted(area_rain[area["id"]].items())}}
+            l5 = build_l5([{"plot_id": p, "area": plot_area[p]["id"]} for p in cell["plots"]], area_rain, recent, today)
+
+            snapshot = build_snapshot(cell, climate, recent, l5, areas, values.get(SUN, {}), units, sources, generated_at)
             write_json(out / "cells" / cell["id"] / "latest.json", snapshot)
-            p30 = recent["p30"]
-            log.info("%s: %d plot(s), rain to %s, suspect %s, P30 %s", cell["id"], len(cell["plots"]),
-                     recent["last_day"], recent["suspect_months"] or "none", p30 and p30["p30_mm"])
+            log.info("%s: %d plot(s), NASA rain to %s, suspect %s; P30 %s", cell["id"], len(cell["plots"]),
+                     recent["last_day"], recent["suspect_months"] or "none",
+                     ", ".join(f"{p} {r['p30_mm']} ({r['p30_source']}, {r['p30_quality']})" for p, r in l5.items()))
         except Exception:
             failed += 1
             log.exception("%s: failed", cell["id"])
 
-    index = {p["plot_id"]: {"cell": grid_cell(float(p["lat"]), float(p["lon"]))["id"]} for p in plots}
+    index = {p["plot_id"]: {"cell": grid_cell(float(p["lat"]), float(p["lon"]))["id"],
+                            "weatherkit_area": plot_area[p["plot_id"]]["id"]} for p in plots}
     for entry in index.values():
         entry["path"] = f"cells/{entry['cell']}/latest.json"
     write_json(out / "plots.json", {"schema": SCHEMA_VERSION, "generated_at": generated_at, "plots": index})
@@ -307,6 +373,8 @@ def main(argv=None):
     log.info("%d plot(s), WeatherKit check %s", len(plots), "on" if weatherkit else "off")
     failed = run(plots, args.out, today, session=session, weatherkit=weatherkit,
                  refresh_climate=args.refresh_climate, archive_forecast=args.archive_forecast)
+    if weatherkit:
+        log.info("WeatherKit requests this run: %d", weatherkit.calls)
     return 1 if failed else 0
 
 

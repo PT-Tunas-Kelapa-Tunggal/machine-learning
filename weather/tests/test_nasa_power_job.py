@@ -30,6 +30,12 @@ class GridCells(unittest.TestCase):
     def test_southern_hemisphere_id(self):
         self.assertEqual(job.grid_cell(-0.4, 101.4)["id"], "s0.500_e101.2500")
 
+    def test_weatherkit_area_is_about_11_km(self):
+        # 104.45 sits on a box edge; it falls in the box centred on 104.5 (the same rounding in Swift)
+        self.assertEqual(job.weatherkit_area(0.92, 104.45)["id"], "n0.900_e104.5000")
+        self.assertEqual(job.weatherkit_area(0.93, 104.47)["id"], "n0.900_e104.5000")   # ~2 km away: same area
+        self.assertNotEqual(job.weatherkit_area(1.05, 104.45)["id"], "n0.900_e104.5000")  # ~15 km away: not
+
     def test_nearby_plots_share_one_cell(self):
         cells = job.group_plots([{"plot_id": "a", "lat": 0.92, "lon": 104.45},
                                  {"plot_id": "b", "lat": 0.95, "lon": 104.40},
@@ -57,8 +63,8 @@ class BuildFiles(unittest.TestCase):
         self.assertEqual(recent["checked_against"], "normals")
         self.assertNotIn("2026-08-15", recent["rain_mm"])
         self.assertEqual(recent["last_day"], "2026-09-30")
-        self.assertEqual(recent["p30"]["p30_mm"], 75.0)
-        self.assertEqual(recent["p30"]["p30_start_date"], "2026-09-01")
+        self.assertEqual(recent["nasa_p30"]["p30_mm"], 75.0)
+        self.assertEqual(recent["nasa_p30"]["p30_start_date"], "2026-09-01")
 
     def test_recent_keeps_a_wet_month_weatherkit_also_saw(self):
         normals = {str(m): 200.0 for m in range(1, 13)}
@@ -88,11 +94,17 @@ class FullRun(unittest.TestCase):
             self.assertEqual(len(self.calls), 2)  # one climate + one recent request for the shared cell
             snapshot = json.loads((Path(out) / "cells/n1.000_e104.3750/latest.json").read_text())
             self.assertEqual(snapshot["cell"]["plots"], ["a", "b"])
-            self.assertEqual(snapshot["recent_rain"]["p30"]["p30_mm"], 90.0)
+            self.assertEqual(snapshot["schema"], 2)
+            self.assertEqual(snapshot["recent_rain"]["nasa_p30"]["p30_mm"], 90.0)
+            # No WeatherKit configured: every plot's P30 falls back to checked NASA POWER
+            self.assertEqual(snapshot["l5"]["a"]["p30_source"], "nasa-power")
+            self.assertEqual(snapshot["l5"]["a"]["p30_quality"], "fallback")
+            self.assertEqual(snapshot["l5"]["b"]["p30_mm"], 90.0)
             self.assertEqual(snapshot["recent_rain"]["rain_mm"]["2026-08-01"], 3.0)  # whole of last month
             self.assertEqual(snapshot["irradiance"]["unit"], "MJ/m^2/day")
             index = json.loads((Path(out) / "plots.json").read_text())
             self.assertEqual(index["plots"]["b"]["path"], "cells/n1.000_e104.3750/latest.json")
+            self.assertEqual(index["plots"]["a"]["weatherkit_area"], "n0.900_e104.5000")
 
             # Second run the same day reuses the climate table: only the recent request is made
             job.run(plots, out, date(2026, 10, 11), session=None, fetch=self.fake_fetch)
@@ -110,6 +122,78 @@ class FullRun(unittest.TestCase):
                 failed = job.run(plots, out, date(2026, 10, 11), session=None, fetch=flaky)
             self.assertEqual(failed, 1)
             self.assertTrue((Path(out) / "cells/n1.000_e104.3750/latest.json").is_file())
+
+
+class FakeWeatherKit:
+    """Returns the same rate every day; counts history requests per area."""
+
+    def __init__(self, mm_per_day, last_day_offset=1):
+        self.mm, self.offset, self.requests = mm_per_day, last_day_offset, []
+
+    def history(self, lat, lon, start, end):
+        self.requests.append((lat, lon))
+        stop = end - timedelta(days=self.offset - 1)  # offset > 1 = data stops early (stale)
+        return {start + timedelta(days=i): self.mm for i in range((stop - start).days + 1)}
+
+    def daily(self, lat, lon, start=None, end=None):
+        return {"forecastDaily": {"days": []}}
+
+
+class WeatherKitFirst(unittest.TestCase):
+    TODAY = date(2026, 10, 11)
+
+    def nasa(self, lat, lon, start, end, params, session):
+        return FullRun.fake_fetch(self, lat, lon, start, end, params, session)
+
+    def setUp(self):
+        self.calls = []
+
+    def run_job(self, plots, weatherkit):
+        out = tempfile.TemporaryDirectory()
+        self.addCleanup(out.cleanup)
+        failed = job.run(plots, out.name, self.TODAY, session=None, weatherkit=weatherkit, fetch=self.nasa)
+        self.assertEqual(failed, 0)
+        cell = job.grid_cell(plots[0]["lat"], plots[0]["lon"])["id"]
+        return json.loads((Path(out.name) / "cells" / cell / "latest.json").read_text())
+
+    def test_p30_comes_from_weatherkit_when_it_is_recent(self):
+        wk = FakeWeatherKit(mm_per_day=1.5)
+        snap = self.run_job([{"plot_id": "a", "lat": 0.92, "lon": 104.45}], wk)
+        l5 = snap["l5"]["a"]
+        self.assertEqual((l5["p30_source"], l5["p30_quality"], l5["p30_mm"]), ("weatherkit-history", "ok", 45.0))
+        self.assertTrue(l5["water_stress"])
+        self.assertEqual(l5["p30_end_date"], "2026-10-10")  # yesterday: today's value is still partly forecast
+        self.assertIn("n0.900_e104.5000", snap["weatherkit_rain"])
+
+    def test_plots_in_one_area_share_one_weatherkit_fetch(self):
+        wk = FakeWeatherKit(mm_per_day=3.0)
+        snap = self.run_job([{"plot_id": "a", "lat": 0.92, "lon": 104.45},
+                             {"plot_id": "b", "lat": 0.93, "lon": 104.47},
+                             {"plot_id": "c", "lat": 1.05, "lon": 104.45}], wk)
+        p30_requests = [r for r in wk.requests if r != (1.0, 104.375)]  # the cell-centre call is the monthly check
+        self.assertEqual(len(p30_requests), 2)
+        self.assertEqual(snap["l5"]["a"]["weatherkit_area"], snap["l5"]["b"]["weatherkit_area"])
+
+    def test_stale_weatherkit_falls_back_to_nasa_power(self):
+        wk = FakeWeatherKit(mm_per_day=3.0, last_day_offset=10)  # WeatherKit data stops 10 days ago
+        l5 = self.run_job([{"plot_id": "a", "lat": 0.92, "lon": 104.45}], wk)["l5"]["a"]
+        self.assertEqual((l5["p30_source"], l5["p30_quality"]), ("nasa-power", "fallback"))
+
+    def test_weatherkit_outage_degrades_instead_of_failing_the_cell(self):
+        class DownWeatherKit(FakeWeatherKit):
+            def history(self, lat, lon, start, end):
+                raise ConnectionError("weatherkit.apple.com unreachable")
+
+        with self.assertLogs("nasa_power_job", level="WARNING"):
+            snap = self.run_job([{"plot_id": "a", "lat": 0.92, "lon": 104.45}], DownWeatherKit(1.0))
+        self.assertEqual(snap["recent_rain"]["checked_against"], "normals")
+        self.assertEqual((snap["l5"]["a"]["p30_source"], snap["l5"]["a"]["p30_quality"]), ("nasa-power", "fallback"))
+
+    def test_no_source_gives_an_unknown_flag_not_false(self):
+        normals = {str(m): 10.0 for m in range(1, 13)}
+        recent = job.build_recent(days(date(2026, 9, 1), [40.0] * 40), normals)  # NASA months all suspect
+        l5 = job.build_l5([{"plot_id": "a", "area": "x"}], {"x": None}, recent, self.TODAY)["a"]
+        self.assertEqual((l5["p30_quality"], l5["p30_mm"], l5["water_stress"]), ("none", None, None))
 
 
 if __name__ == "__main__":
