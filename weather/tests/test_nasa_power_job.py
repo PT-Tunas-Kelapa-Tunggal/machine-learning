@@ -68,6 +68,19 @@ class BuildFiles(unittest.TestCase):
         self.assertEqual(recent["nasa_p30"]["p30_mm"], 75.0)
         self.assertEqual(recent["nasa_p30"]["p30_start_date"], "2026-09-01")
 
+    def test_a_broken_month_is_dropped_in_its_first_days(self):
+        normals = {str(m): 186.0 for m in range(1, 13)}
+        rain = days(date(2026, 8, 1), [2.0] * 31 + [80.0] * 5)  # August fine; 1-5 Sep broken, 400 mm < 3 × 186
+        recent = job.build_recent(rain, normals)
+        self.assertEqual((recent["suspect_months"], recent["unchecked_months"]), (["2026-09"], []))
+        self.assertEqual(recent["nasa_p30"]["p30_end_date"], "2026-08-31")  # the fallback window stays in August
+
+    def test_a_month_with_too_few_days_is_unchecked(self):
+        normals = {str(m): 186.0 for m in range(1, 13)}
+        recent = job.build_recent(days(date(2026, 8, 1), [2.0] * 34), normals)  # 1-3 Sep only
+        self.assertEqual((recent["suspect_months"], recent["unchecked_months"]), ([], ["2026-09"]))
+        self.assertNotIn("2026-09-01", recent["rain_mm"])
+
     def test_recent_keeps_a_wet_month_weatherkit_also_saw(self):
         normals = {str(m): 200.0 for m in range(1, 13)}
         rain = days(date(2026, 8, 1), [25.0] * 31)

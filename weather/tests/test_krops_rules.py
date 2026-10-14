@@ -4,6 +4,7 @@
 """
 import json
 import math
+import random
 import sys
 import unittest
 from datetime import date, timedelta
@@ -72,6 +73,8 @@ def run(case):
         normals = {int(k): v for k, v in x["normals"].items()}
         months = rules.suspect_months(to_daily(x["nasa"]), normals, to_daily(x["weatherkit"]))
         return [f"{y}-{m:02d}" for y, m in sorted(months)]
+    if f == "unchecked_months":
+        return [f"{y}-{m:02d}" for y, m in sorted(rules.unchecked_months(to_daily(x["daily"])))]
     if f == "drop_months":
         return rules.drop_months(to_daily(x["daily"]), {to_month(m) for m in x["months"]})
     if f == "month_table":
@@ -113,13 +116,51 @@ class RuleCases(unittest.TestCase):
     def test_every_function_is_covered(self):
         covered = {c["function"] for c in CASES}
         public = {"daily_from_pairs", "missing_in_p30_window", "compute_p30", "choose_p30", "monthly_normals",
-                  "suspect_months", "drop_months", "month_table", "month_gate", "stage_b_day_pick", "l8_decision"}
+                  "suspect_months", "unchecked_months", "drop_months", "month_table", "month_gate", "stage_b_day_pick",
+                  "l8_decision"}
         self.assertEqual(public - covered, set())
 
     def test_the_pending_cut_is_tested_both_ways_and_still_on_by_default(self):
         flags = {c["input"].get("cut_at_closed_month") for c in CASES if c["function"] == "l8_decision"}
         self.assertTrue({True, False} <= flags)
         self.assertIs(rules.CUT_WINDOW_AT_CLOSED_MONTH, True)  # today's behaviour until the team decides
+
+
+def suspect_months_before(nasa, normals, weatherkit=None, ratio=3.0):
+    """The monthly check as it was before pro-rating (frozen copy), for the stricter-only test."""
+    wk = rules.monthly_totals(weatherkit) if weatherkit else {}
+    out = set()
+    for (y, m), total in rules.monthly_totals(nasa).items():
+        if total <= ratio * normals[m]:
+            continue
+        if (y, m) in wk and total <= ratio * wk[(y, m)]:
+            continue
+        out.add((y, m))
+    return out
+
+
+class MonthlyCheckOnlyGetsStricter(unittest.TestCase):
+    def test_no_window_rejected_before_is_accepted_now(self):
+        rng, made_stricter = random.Random(2026), 0
+        for trial in range(500):
+            first = date(2026, rng.randint(1, 12), 1)
+            n = rng.randint(1, 75)  # one to three months, the last one often part-filled
+            nasa = {first + timedelta(days=i): (None if rng.random() < 0.03 else rng.choice([0.0, rng.uniform(0, 15),
+                                                                                              rng.uniform(0, 120)]))
+                    for i in range(n)}
+            present = {d: v for d, v in nasa.items() if v is not None}
+            normals = {m: rng.uniform(40.0, 350.0) for m in range(1, 13)}
+            wk = None if rng.random() < 0.3 else {first + timedelta(days=i): rng.uniform(0, 30)
+                                                   for i in range(rng.randint(0, n + 5)) if rng.random() > 0.05}
+            before = rules.drop_months(present, suspect_months_before(present, normals, wk))
+            after = rules.drop_months(present, rules.suspect_months(present, normals, wk) | rules.unchecked_months(present))
+            self.assertLessEqual(set(after), set(before), trial)
+            for end in present:
+                window = [end - timedelta(days=i) for i in range(rules.P30_WINDOW_DAYS)]
+                if not all(d in before for d in window):  # rejected before…
+                    self.assertFalse(all(d in after for d in window), (trial, end))  # …still rejected
+            made_stricter += len(after) < len(before)
+        self.assertGreater(made_stricter, 50)  # the scenarios do reach the new tests
 
 
 if __name__ == "__main__":

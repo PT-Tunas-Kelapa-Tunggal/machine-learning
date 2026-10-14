@@ -8,7 +8,8 @@ What a run does, for each grid cell holding at least one plot:
   1. Climate (when missing, older than a year, or with --refresh-climate): 1991–2020 daily rain → monthly
      normals and the Stage A month table with gates.             → cells/<cell>/climate.json
   2. Recent NASA POWER rain: from the 1st of last month to today → drop months that fail the monthly check
-     (against the normals and, when configured, WeatherKit) → checked daily rain and NASA P30.
+     (against the normals and, when configured, WeatherKit; pro-rated while a month fills in) and months with
+     too few days to judge → checked daily rain and NASA P30.
   3. P30 per plot (L5 data contract): WeatherKit history first, checked NASA POWER as the fallback. A 30-day window
      with a missing day is never summed as 0 mm or patched from the other source; the record counts the missing
      days per source (p30_missing_days).
@@ -276,15 +277,20 @@ def _iso_record(record):
 
 
 def build_recent(rain, normals_mm, weatherkit_rain=None):
-    """Checked recent NASA POWER rain: suspect months dropped, plus the NASA-only P30 from what is left."""
+    """Checked recent NASA POWER rain: suspect and unchecked months dropped, plus the NASA-only P30 from what is left.
+
+    An unchecked month (fewer than rules.SUSPECT_MIN_DAYS days) can't serve as the fallback until it can be judged.
+    """
     normals = {int(m): v for m, v in normals_mm.items()}
     present = {d: v for d, v in rain.items() if v is not None}
     suspect = rules.suspect_months(present, normals, weatherkit_rain)
-    checked = rules.drop_months(present, suspect)
+    unchecked = rules.unchecked_months(present) - suspect
+    checked = rules.drop_months(present, suspect | unchecked)
     return {
         "last_day": max(present).isoformat() if present else None,
         "checked_against": "normals and weatherkit" if weatherkit_rain else "normals",
         "suspect_months": [f"{y}-{m:02d}" for y, m in sorted(suspect)],
+        "unchecked_months": [f"{y}-{m:02d}" for y, m in sorted(unchecked)],
         "rain_mm": {d.isoformat(): v for d, v in sorted(checked.items())},
         "nasa_p30": _iso_record(rules.compute_p30(checked, "nasa-power")),
     }

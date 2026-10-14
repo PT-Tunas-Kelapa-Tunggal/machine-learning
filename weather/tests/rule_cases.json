@@ -2210,6 +2210,184 @@
    "expected": []
   },
   {
+   "name": "check: a broken month is caught in its first days (pro-rated)",
+   "function": "suspect_months",
+   "input": {
+    "nasa": {
+     "start": "2026-01-01",
+     "values": [
+      80.0,
+      80.0,
+      80.0,
+      80.0,
+      80.0
+     ]
+    },
+    "normals": {
+     "1": 186.0,
+     "2": 186.0,
+     "3": 186.0,
+     "4": 186.0,
+     "5": 186.0,
+     "6": 186.0,
+     "7": 186.0,
+     "8": 186.0,
+     "9": 186.0,
+     "10": 186.0,
+     "11": 186.0,
+     "12": 186.0
+    },
+    "weatherkit": null
+   },
+   "expected": [
+    "2026-01"
+   ]
+  },
+  {
+   "name": "check: a wet part month WeatherKit also saw is kept",
+   "function": "suspect_months",
+   "input": {
+    "nasa": {
+     "start": "2026-01-01",
+     "values": [
+      20.0,
+      20.0,
+      20.0,
+      20.0,
+      20.0
+     ]
+    },
+    "normals": {
+     "1": 186.0,
+     "2": 186.0,
+     "3": 186.0,
+     "4": 186.0,
+     "5": 186.0,
+     "6": 186.0,
+     "7": 186.0,
+     "8": 186.0,
+     "9": 186.0,
+     "10": 186.0,
+     "11": 186.0,
+     "12": 186.0
+    },
+    "weatherkit": {
+     "start": "2026-01-01",
+     "values": [
+      10.0,
+      10.0,
+      10.0,
+      10.0,
+      10.0
+     ]
+    }
+   },
+   "expected": []
+  },
+  {
+   "name": "check: WeatherKit's extra days can't hide a broken part month",
+   "function": "suspect_months",
+   "input": {
+    "nasa": {
+     "start": "2026-01-01",
+     "values": [
+      80.0,
+      80.0,
+      80.0,
+      80.0,
+      80.0
+     ]
+    },
+    "normals": {
+     "1": 186.0,
+     "2": 186.0,
+     "3": 186.0,
+     "4": 186.0,
+     "5": 186.0,
+     "6": 186.0,
+     "7": 186.0,
+     "8": 186.0,
+     "9": 186.0,
+     "10": 186.0,
+     "11": 186.0,
+     "12": 186.0
+    },
+    "weatherkit": {
+     "start": "2026-01-01",
+     "values": [
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      60.0,
+      60.0,
+      60.0
+     ]
+    }
+   },
+   "expected": [
+    "2026-01"
+   ]
+  },
+  {
+   "name": "unchecked: 4 days of a month are too few to judge",
+   "function": "unchecked_months",
+   "input": {
+    "daily": {
+     "start": "2026-01-01",
+     "values": [
+      3.0,
+      3.0,
+      3.0,
+      3.0
+     ]
+    }
+   },
+   "expected": [
+    "2026-01"
+   ]
+  },
+  {
+   "name": "unchecked: 5 days can be judged",
+   "function": "unchecked_months",
+   "input": {
+    "daily": {
+     "start": "2026-01-01",
+     "values": [
+      3.0,
+      3.0,
+      3.0,
+      3.0,
+      3.0
+     ]
+    }
+   },
+   "expected": []
+  },
+  {
+   "name": "unchecked: missing days don't count towards the 5",
+   "function": "unchecked_months",
+   "input": {
+    "daily": {
+     "start": "2026-01-01",
+     "values": [
+      3.0,
+      null,
+      3.0,
+      null,
+      3.0,
+      null,
+      3.0,
+      null
+     ]
+    }
+   },
+   "expected": [
+    "2026-01"
+   ]
+  },
+  {
    "name": "check: dropping a suspect month removes all its days",
    "function": "drop_months",
    "input": {

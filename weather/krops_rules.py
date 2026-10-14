@@ -15,6 +15,7 @@ Status of each rule: "proposal" = the 17 Sep 2026 proposal, "decided" = the 9 Oc
 """
 from __future__ import annotations
 
+import calendar
 from datetime import timedelta
 from statistics import mean, median
 
@@ -28,6 +29,8 @@ P30_MAX_AGE_DAYS = 7        # a window ending earlier than this many days ago is
 P30_SOURCE_ORDER = ("weatherkit-history", "nasa-power")  # proposed; on 9 Oct NASA POWER came first
 
 SUSPECT_RATIO = 3.0         # NASA POWER monthly check (proposed)
+SUSPECT_MIN_DAYS = 5        # GUESS – no source yet: a month with fewer NASA POWER days can't be judged (unchecked);
+                            # at 5 or less, last month's checked window stays recent enough while a new month fills in
 NORMAL_PERIOD = (1991, 2020)
 
 HEAVY_RAIN_MM = 25.0        # L8 Stage B: a day over this is heavy (proposal)
@@ -135,20 +138,36 @@ def monthly_normals(daily, first=NORMAL_PERIOD[0], last=NORMAL_PERIOD[1]):
 
 
 def suspect_months(nasa, normals, weatherkit=None, ratio=SUSPECT_RATIO):
-    """NASA POWER months to drop: total over ratio × the normal AND over ratio × WeatherKit's total.
+    """NASA POWER months to drop: too wet against the normal AND against WeatherKit, by either of two tests.
 
-    A month WeatherKit has no data for is judged on the normal alone. Requiring both keeps a genuinely
-    wet month, which WeatherKit also sees, from being thrown out.
+    - Whole month (as before): the total over the days present is over ratio × the full-month normal, and over
+      ratio × WeatherKit's total for the month (a month WeatherKit has no data for is judged on the normal alone).
+    - Pro-rated, for a month still filling in: the same total against ratio × the normal scaled to the days NASA POWER
+      has, and against ratio × WeatherKit's total on those same days (none of them → the normal alone).
+    For a whole month the second test is the first one or stricter, so it only ever adds months: no window dropped
+    before is kept now. Requiring WeatherKit too keeps a genuinely wet month, which WeatherKit also sees.
     """
-    wk = monthly_totals(weatherkit) if weatherkit else {}
+    nasa_rain, wk_rain = _present(nasa), _present(weatherkit)
+    wk_totals = monthly_totals(wk_rain)
     out = set()
-    for (y, m), total in monthly_totals(nasa).items():
-        if total <= ratio * normals[m]:
+    for (y, m), total in monthly_totals(nasa_rain).items():
+        if total > ratio * normals[m] and ((y, m) not in wk_totals or total > ratio * wk_totals[(y, m)]):
+            out.add((y, m))
             continue
-        if (y, m) in wk and total <= ratio * wk[(y, m)]:
-            continue
-        out.add((y, m))
+        days = [d for d in nasa_rain if (d.year, d.month) == (y, m)]
+        share = len(days) / calendar.monthrange(y, m)[1]
+        wk_same = [wk_rain[d] for d in days if d in wk_rain]
+        if total > ratio * normals[m] * share and (not wk_same or total > ratio * sum(wk_same)):
+            out.add((y, m))
     return out
+
+
+def unchecked_months(nasa, min_days=SUSPECT_MIN_DAYS):
+    """NASA POWER months with too few days to judge: like suspect months, they can't serve as the fallback."""
+    counts = {}
+    for d in _present(nasa):
+        counts[(d.year, d.month)] = counts.get((d.year, d.month), 0) + 1
+    return {month for month, n in counts.items() if n < min_days}
 
 
 def drop_months(daily, months):
