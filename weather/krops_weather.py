@@ -6,7 +6,7 @@ and the Swift app run.
 import json
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -40,7 +40,8 @@ P30_THRESHOLD_MM = 60  # L5: proposal rule
 HEAVY_RAIN_MM = 25     # L8 Stage B: proposal rule
 SUSPECT_RATIO = 3      # a NASA POWER month this many times both references is not trusted
 
-TODAY = datetime.now(TZ).date()
+AS_OF_DATE = os.getenv("AS_OF_DATE")  # rerun as of that day, on the responses saved then; never fetches
+TODAY = date.fromisoformat(AS_OF_DATE) if AS_OF_DATE else datetime.now(TZ).date()
 RAW_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -58,11 +59,17 @@ def save_raw(source, kind, payload):
 def cached(source, kind, fetch, forever=False):
     """Reuse a saved response instead of calling the API again.
 
-    forever=False: only a response saved today (forecasts, recent rain).
+    forever=False: only a response saved on TODAY (forecasts, recent rain).
     forever=True: any saved response (past days, which don't change).
+    With AS_OF_DATE set, only responses saved on or before that day count, and a missing one raises: an as-of
+    run reproduces that day and never asks an API again.
     """
-    pattern = f"{source}_{kind}_*.json" if forever else f"{source}_{kind}_{datetime.now(TZ):%Y%m%d}T*.json"
+    pattern = f"{source}_{kind}_*.json" if forever else f"{source}_{kind}_{TODAY:%Y%m%d}T*.json"
     hits = sorted(RAW_DIR.glob(pattern))
+    if AS_OF_DATE:
+        hits = [h for h in hits if h.stem.rsplit("_", 1)[1][:8] <= f"{TODAY:%Y%m%d}"]
+        if not hits:
+            raise RuntimeError(f"AS_OF_DATE={AS_OF_DATE}: no {source} {kind} response saved by then; not fetching")
     if hits:
         return json.loads(hits[-1].read_text())
     payload = fetch()
