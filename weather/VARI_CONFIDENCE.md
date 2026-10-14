@@ -119,6 +119,29 @@ Hasil tidak memuat koordinat. `final: false` berarti ada input yang belum diketa
 **Saran:** pakai confidence sebagai **log (L9)** dan untuk mengurutkan scan mana yang paling bisa dipercaya. Jangan
 dulu dipakai L6 untuk mengubah rekomendasi, sampai garis awan dan daun basah dikalibrasi.
 
+## Mengapa aturan, bukan machine learning
+
+Confidence ini **aturan tetap**: input yang sama selalu memberi hasil yang sama, dan semua angkanya ditulis di kode.
+Tidak ada model yang dilatih. Alasannya:
+
+- **Belum ada label untuk dipelajari.** ML butuh contoh "VARI scan ini akurat" atau "meleset sekian". Data itu belum
+  ada: belum ada terbang ulang, cek lapangan, atau data BMKG. Tanpa label, model hanya meniru asumsi atau noise.
+- **Mekanismenya sudah diketahui:** bayangan dari matahari rendah, cahaya berganti karena awan, daun basah, tanaman
+  kering. Hal ini bisa ditulis langsung; ML butuh banyak data hanya untuk menemukannya ulang.
+- **Alasannya pasti.** "Hujan 11,7 mm dalam 6 jam sebelum terbang" memang penyebab angkanya, bukan perkiraan.
+- **Setiap angka bisa diputuskan tim dan diuji**, seperti aturan Krops lainnya.
+- **Input yang hilang tidak pernah dianggap baik** (`final: false`); ML biasanya mengisinya diam-diam.
+- **ML sudah dipakai di tempat yang punya label:** deteksi pohon (YOLO) dan mask tajuk (SAM).
+
+Aturannya tetap, tetapi angkanya tidak final:
+
+| Tahap | Apa | Butuh |
+|---|---|---|
+| 1. Sekarang | Aturan dengan angka tebakan, dicatat sebagai log | — |
+| 2. Kumpulkan label | Terbang ulang satu blok dalam beberapa hari dengan cuaca berbeda. Hara tidak berubah secepat itu, jadi beda VARI per tajuk adalah galat pengukuran. | Jadwal terbang ulang, waktu terbang UTC |
+| 3. Kalibrasi | Pilih garis dan nilai faktor dari data tahap 2. Hasilnya tetap tabel yang bisa dibaca. | Puluhan pasang penerbangan |
+| 4. ML | Model memperkirakan galat VARI dari cuaca dan ciri foto; dipakai hanya jika mengalahkan aturan pada penerbangan yang tidak dipakai melatih. | Ratusan penerbangan, beberapa kebun dan musim |
+
 ## Belum diputuskan
 
 - **Garis awan dan daun basah.** Kalibrasi dengan terbang ulang di blok yang sama dalam beberapa hari dengan langit
