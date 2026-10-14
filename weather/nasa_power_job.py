@@ -16,6 +16,9 @@ What a run does, for each grid cell holding at least one plot:
      Also in latest.json, log-only (no rule reads it): `irradiance_check`, NASA POWER's daily sunlight checked
      against ALLSKY ≤ CLRSKY ≤ Ra over the last QA_LOOKBACK_DAYS (CLRSKY runs months behind, so the same single
      request reaches further back; rain and P30 still start where they did).
+     Also stored only: `temperature` (T2M, T2M_MAX, T2M_MIN) over the same days as `irradiance`, for a future L5
+     water balance. latest.json is replaced every run, so this is the current window only: NASA POWER's own
+     archive is the history.
   4. Index of plot → cell file and WeatherKit area.               → plots.json
   5. Optional (--archive-forecast): today's WeatherKit forecast for plots marked "archive_forecast",
      kept for scoring forecasts against BMKG data later.         → archive/forecast/<plot>/<date>.json
@@ -54,6 +57,8 @@ POWER_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
 RAIN = "PRECTOTCORR"
 SUN = "ALLSKY_SFC_SW_DWN"  # logged only (design doc), no rule reads it
 SUN_CLEAR = "CLRSKY_SFC_SW_DWN"  # irradiance check only (L9, log-only)
+TEMPS = ("T2M", "T2M_MAX", "T2M_MIN")  # stored only, for a future L5 water balance; no rule reads them
+RECENT_PARAMS = (RAIN, SUN, SUN_CLEAR, *TEMPS)  # one daily request per cell carries them all
 CLIMATE_MAX_AGE_DAYS = 365
 GRID_LAT, GRID_LON = 0.5, 0.625  # NASA POWER rain grid (MERRA-2)
 WK_AREA = 0.1                    # WeatherKit P30 area, about 11 km: WeatherKit resolves about 10 km
@@ -234,7 +239,18 @@ def build_l5(plots, area_rain, recent, today):
     return out
 
 
-def build_snapshot(cell, climate, recent, l5, areas, sun, units, sources, generated_at, irradiance_check=None):
+def build_temperature(values, units):
+    """Daily temperature for the stored window: {date: {T2M, T2M_MAX, T2M_MIN}}, a missing value as None."""
+    days = sorted({d for p in TEMPS for d, v in values.get(p, {}).items() if v is not None})
+    return {
+        "params": list(TEMPS),
+        "units": {p: units.get(p) for p in TEMPS},
+        "days": {d.isoformat(): {p: values.get(p, {}).get(d) for p in TEMPS} for d in days},
+    }
+
+
+def build_snapshot(cell, climate, recent, l5, areas, sun, units, sources, generated_at, irradiance_check=None,
+                   temperature=None):
     return {
         "schema": SCHEMA_VERSION,
         "generated_at": generated_at,
@@ -247,6 +263,7 @@ def build_snapshot(cell, climate, recent, l5, areas, sun, units, sources, genera
                        "days": {d.isoformat(): v for d, v in sorted(sun.items()) if v is not None}},
         "nasa_power_sources": sources,
         "irradiance_check": irradiance_check,  # optional, log-only (L9)
+        "temperature": temperature,            # optional, stored only (future L5 water balance)
     }
 
 
@@ -312,7 +329,7 @@ def run(plots, out, today, *, session, weatherkit=None, refresh_climate=False, a
 
             start = (today - timedelta(days=45)).replace(day=1)  # the whole of last month, so its check is fair
             qa_start = min(start, today - timedelta(days=QA_LOOKBACK_DAYS))  # one request, reaching back for CLRSKY
-            fetched, units, sources = fetch(cell["lat"], cell["lon"], qa_start, today, (RAIN, SUN, SUN_CLEAR), session)
+            fetched, units, sources = fetch(cell["lat"], cell["lon"], qa_start, today, RECENT_PARAMS, session)
             values = {p: {d: v for d, v in series.items() if d >= start} for p, series in fetched.items()}  # as before
             present = [d for d, v in values[RAIN].items() if v is not None]
             wk_rain = None
@@ -335,7 +352,8 @@ def run(plots, out, today, *, session, weatherkit=None, refresh_climate=False, a
             l5 = build_l5([{"plot_id": p, "area": plot_area[p]["id"]} for p in cell["plots"]], area_rain, recent, today)
 
             snapshot = build_snapshot(cell, climate, recent, l5, areas, values.get(SUN, {}), units, sources, generated_at,
-                                      irradiance_check=check_cell_irradiance(fetched, cell))
+                                      irradiance_check=check_cell_irradiance(fetched, cell),
+                                      temperature=build_temperature(values, units))
             write_json(out / "cells" / cell["id"] / "latest.json", snapshot)
             check = snapshot["irradiance_check"]
             log.info("%s: %d plot(s), NASA rain to %s, suspect %s; P30 %s; irradiance flags %s", cell["id"],

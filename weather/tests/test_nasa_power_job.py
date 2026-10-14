@@ -86,8 +86,10 @@ class FullRun(unittest.TestCase):
         rain = {start + timedelta(days=i): 3.0 for i in range((end - start).days - 2)}  # 3 days behind
         sun = {d: 20.0 for d in rain}
         clear = {d: 24.0 for d in rain if d <= end - timedelta(days=73)}  # CLRSKY runs ~73 days behind
-        return ({job.RAIN: rain, job.SUN: sun, job.SUN_CLEAR: clear},
-                {job.RAIN: "mm/day", job.SUN: "MJ/m^2/day", job.SUN_CLEAR: "MJ/m^2/day"}, ["MERRA2"])
+        temps = {p: {d: t for d in rain} for p, t in zip(job.TEMPS, (27.0, 31.0, 24.0))}
+        return ({job.RAIN: rain, job.SUN: sun, job.SUN_CLEAR: clear} | temps,
+                {job.RAIN: "mm/day", job.SUN: "MJ/m^2/day", job.SUN_CLEAR: "MJ/m^2/day"} | {p: "C" for p in job.TEMPS},
+                ["MERRA2"])
 
     def test_run_writes_cell_files_and_index(self):
         plots = [{"plot_id": "a", "lat": 0.92, "lon": 104.45}, {"plot_id": "b", "lat": 0.95, "lon": 104.40}]
@@ -199,8 +201,8 @@ class WeatherKitFirst(unittest.TestCase):
         self.assertEqual((l5["p30_quality"], l5["p30_mm"], l5["water_stress"]), ("none", None, None))
 
 
-class IrradianceCheckInTheJob(unittest.TestCase):
-    """The log-only irradiance check reaches further back in the same request, without touching L5."""
+class TrialCellRun(unittest.TestCase):
+    """Helpers for one full run of the trial plot's cell with fake NASA POWER (no tests of its own)."""
 
     TODAY = date(2026, 10, 11)
     PLOTS = [{"plot_id": "a", "lat": 0.92, "lon": 104.45}]
@@ -217,6 +219,10 @@ class IrradianceCheckInTheJob(unittest.TestCase):
 
     def fetch(self, lat, lon, start, end, params, session):
         return FullRun.fake_fetch(self, lat, lon, start, end, params, session)
+
+
+class IrradianceCheckInTheJob(TrialCellRun):
+    """The log-only irradiance check reaches further back in the same request, without touching L5."""
 
     def test_one_request_reaches_back_but_rain_and_irradiance_start_where_they_did(self):
         snap = self.run_job(self.fetch)
@@ -259,6 +265,43 @@ class IrradianceCheckInTheJob(unittest.TestCase):
                 snap = self.run_job(self.fetch)
         self.assertIsNone(snap["irradiance_check"])
         self.assertEqual(snap["l5"]["a"]["p30_mm"], 90.0)
+
+
+
+class TemperatureStoredOnly(TrialCellRun):
+    """T2M, T2M_MAX and T2M_MIN ride in the same request and are stored over the irradiance window; no rule reads them."""
+
+    def test_temperature_is_stored_over_the_irradiance_window(self):
+        snap = self.run_job(self.fetch)
+        recent_calls = [c for c in self.calls if c[2].year != 1991]
+        self.assertEqual(len(recent_calls), 1)
+        self.assertTrue(set(job.TEMPS) <= set(recent_calls[0][4]))
+        temperature = snap["temperature"]
+        self.assertEqual(temperature["units"], {"T2M": "C", "T2M_MAX": "C", "T2M_MIN": "C"})
+        self.assertEqual(sorted(temperature["days"]), sorted(snap["irradiance"]["days"]))
+        self.assertEqual(temperature["days"]["2026-08-01"], {"T2M": 27.0, "T2M_MAX": 31.0, "T2M_MIN": 24.0})
+
+    def test_a_missing_value_is_null_and_a_missing_parameter_is_no_failure(self):
+        def patchy(lat, lon, start, end, params, session):
+            values, units, sources = self.fetch(lat, lon, start, end, params, session)
+            if start.year != 1991:
+                values["T2M_MAX"][date(2026, 8, 2)] = None
+                del values["T2M_MIN"]  # NASA POWER left a parameter out
+            return values, units, sources
+
+        days = self.run_job(patchy)["temperature"]["days"]
+        self.assertEqual(days["2026-08-02"], {"T2M": 27.0, "T2M_MAX": None, "T2M_MIN": None})
+
+    def test_l5_and_l8_inputs_ignore_temperature(self):
+        def hot(lat, lon, start, end, params, session):
+            values, units, sources = self.fetch(lat, lon, start, end, params, session)
+            for p in job.TEMPS:
+                values[p] = {d: 45.0 for d in values.get(p, {})}
+            return values, units, sources
+
+        snap = self.run_job(hot)
+        self.assertEqual(snap["l5"]["a"]["p30_mm"], 90.0)
+        self.assertEqual(snap["climate"]["stage_a"]["10"]["gate"], "open")
 
 
 if __name__ == "__main__":
