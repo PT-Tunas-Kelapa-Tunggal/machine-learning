@@ -35,6 +35,7 @@ GATE_TUNDA_BELOW_MM = 60.0  # L8 Stage A: month average under this → tunda (pr
 GATE_CEK_BELOW_MM = 100.0   # 60–100 → cek (decided)
 GATE_TUNDA_ABOVE_MM = 300.0  # over this → tunda (proposal); 200–300 stays open (decided)
 IN_BAND_MM = (100.0, 200.0)  # in-band share, logged only (decided)
+CUT_WINDOW_AT_CLOSED_MONTH = True  # PENDING TEAM DECISION – not in proposal or brief
 
 
 def _present(daily):
@@ -203,11 +204,12 @@ def stage_b_day_pick(forecast, today, heavy_mm=HEAVY_RAIN_MM):
     return window, removed
 
 
-def l8_decision(forecast, table, today, heavy_mm=HEAVY_RAIN_MM):
+def l8_decision(forecast, table, today, heavy_mm=HEAVY_RAIN_MM, cut_at_closed_month=CUT_WINDOW_AT_CLOSED_MONTH):
     """The L8 output: Stage A on today's month, then Stage B on the cached forecast.
 
-    `table` maps each calendar month to {"avg_mm": …} (the 1991–2020 table, proposed). Dates in a later
-    month whose own gate isn't open are dropped (window crossing a month end, proposed in the design doc).
+    `table` maps each calendar month to {"avg_mm": …} (the 1991–2020 table, proposed). With cut_at_closed_month,
+    dates of a later month whose own gate isn't open are dropped from the window. That cut is pending a team
+    decision: it is in neither the proposal nor the brief.
     """
     gates = {m: month_gate(row["avg_mm"]) for m, row in table.items()}
     result = {"month_gate": {"month": today.month, "avg_mm": table[today.month]["avg_mm"], "gate": gates[today.month]},
@@ -219,5 +221,6 @@ def l8_decision(forecast, table, today, heavy_mm=HEAVY_RAIN_MM):
     if not _present(forecast):
         return result | {"l8_state": "cek_hujan"}
     window, removed = stage_b_day_pick(forecast, today, heavy_mm)
-    window = [d for d in window if gates.get(d.month) == "open"]
+    if cut_at_closed_month:
+        window = [d for d in window if gates.get(d.month) == "open"]
     return result | {"l8_state": "jendela_tabur" if window else "cek_hujan", "dates": window, "removed": removed}

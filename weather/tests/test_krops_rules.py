@@ -82,7 +82,8 @@ def run(case):
         window, removed = rules.stage_b_day_pick(to_daily(x["forecast"]), to_date(x["today"]))
         return {"window": window, "removed": removed}
     if f == "l8_decision":
-        return rules.l8_decision(to_daily(x["forecast"]), to_table(x["table"]), to_date(x["today"]))
+        cut = x.get("cut_at_closed_month", rules.CUT_WINDOW_AT_CLOSED_MONTH)
+        return rules.l8_decision(to_daily(x["forecast"]), to_table(x["table"]), to_date(x["today"]), cut_at_closed_month=cut)
     raise ValueError(f"unknown function {f}")
 
 
@@ -114,6 +115,11 @@ class RuleCases(unittest.TestCase):
         public = {"daily_from_pairs", "missing_in_p30_window", "compute_p30", "choose_p30", "monthly_normals",
                   "suspect_months", "drop_months", "month_table", "month_gate", "stage_b_day_pick", "l8_decision"}
         self.assertEqual(public - covered, set())
+
+    def test_the_pending_cut_is_tested_both_ways_and_still_on_by_default(self):
+        flags = {c["input"].get("cut_at_closed_month") for c in CASES if c["function"] == "l8_decision"}
+        self.assertTrue({True, False} <= flags)
+        self.assertIs(rules.CUT_WINDOW_AT_CLOSED_MONTH, True)  # today's behaviour until the team decides
 
 
 if __name__ == "__main__":
