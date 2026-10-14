@@ -256,7 +256,9 @@ class WeatherKitHistory(unittest.TestCase):
 
 
 class TrialCellRun(unittest.TestCase):
-    """Helpers for one full run of the trial plot's cell with fake NASA POWER (no tests of its own)."""
+    """Helpers for one full run of the trial plot's cell with fake NASA POWER (no tests of its own).
+
+    run_job returns latest.json and keeps the backend-only qa_log.json in self.qa_log."""
 
     TODAY = date(2026, 10, 11)
     PLOTS = [{"plot_id": "a", "lat": 0.92, "lon": 104.45}]
@@ -269,10 +271,34 @@ class TrialCellRun(unittest.TestCase):
         self.addCleanup(out.cleanup)
         failed = job.run(self.PLOTS, out.name, self.TODAY, session=None, fetch=fetch)
         self.assertEqual(failed, 0)
-        return json.loads((Path(out.name) / "cells/n1.000_e104.3750/latest.json").read_text())
+        cell = Path(out.name) / "cells/n1.000_e104.3750"
+        self.qa_log = json.loads((cell / "qa_log.json").read_text())
+        return json.loads((cell / "latest.json").read_text())
 
     def fetch(self, lat, lon, start, end, params, session):
         return FullRun.fake_fetch(self, lat, lon, start, end, params, session)
+
+
+class LeanLatestJson(TrialCellRun):
+    """The phone downloads latest.json on a weak signal: it keeps exactly the schema-2 keys."""
+
+    SCHEMA_2_KEYS = ["schema", "generated_at", "cell", "climate", "l5", "weatherkit_rain", "recent_rain", "irradiance",
+                     "nasa_power_sources"]
+
+    def test_latest_json_keeps_the_schema_2_keys_and_the_qa_log_holds_the_rest(self):
+        snap = self.run_job(self.fetch)
+        self.assertEqual((snap["schema"], list(snap)), (2, self.SCHEMA_2_KEYS))
+        self.assertEqual(list(self.qa_log), ["schema", "generated_at", "cell", "irradiance_check", "temperature"])
+        self.assertEqual(self.qa_log["generated_at"], snap["generated_at"])
+        self.assertEqual(self.qa_log["cell"]["id"], snap["cell"]["id"])
+        self.assertNotIn("plots", self.qa_log["cell"])
+
+    def test_the_index_points_only_at_latest_json(self):
+        with tempfile.TemporaryDirectory() as out:
+            job.run(self.PLOTS, out, self.TODAY, session=None, fetch=self.fetch)
+            entry = json.loads((Path(out) / "plots.json").read_text())["plots"]["a"]
+        self.assertEqual(sorted(entry), ["cell", "path", "weatherkit_area"])
+        self.assertTrue(entry["path"].endswith("latest.json"))
 
 
 class IrradianceCheckInTheJob(TrialCellRun):
@@ -286,7 +312,7 @@ class IrradianceCheckInTheJob(TrialCellRun):
         self.assertIn(job.SUN_CLEAR, recent_calls[0][4])
         self.assertEqual(min(snap["recent_rain"]["rain_mm"]), "2026-08-01")  # 1st of the month holding today − 45
         self.assertEqual(min(snap["irradiance"]["days"]), "2026-08-01")
-        check = snap["irradiance_check"]
+        check = self.qa_log["irradiance_check"]
         self.assertEqual((check["first_day"], check["status"], check["days_flagged"]), ("2026-06-13", "log-only", 0))
         self.assertGreater(check["days_with_clrsky"], 0)
 
@@ -309,7 +335,8 @@ class IrradianceCheckInTheJob(TrialCellRun):
                 values[job.SUN][date(2026, 7, 1)] = 30.0  # over that day's CLRSKY of 24
             return values, units, sources
 
-        flagged = self.run_job(broken)["irradiance_check"]["flagged"]
+        self.run_job(broken)
+        flagged = self.qa_log["irradiance_check"]["flagged"]
         self.assertEqual(list(flagged), ["2026-07-01"])
         self.assertEqual(flagged["2026-07-01"]["codes"], ["allsky_gt_clrsky"])
 
@@ -317,7 +344,7 @@ class IrradianceCheckInTheJob(TrialCellRun):
         with mock.patch.object(job.irradiance, "check_irradiance", side_effect=RuntimeError("bad maths")):
             with self.assertLogs("nasa_power_job", level="WARNING"):
                 snap = self.run_job(self.fetch)
-        self.assertIsNone(snap["irradiance_check"])
+        self.assertIsNone(self.qa_log["irradiance_check"])
         self.assertEqual(snap["l5"]["a"]["p30_mm"], 90.0)
 
 
@@ -330,7 +357,7 @@ class TemperatureStoredOnly(TrialCellRun):
         recent_calls = [c for c in self.calls if c[2].year != 1991]
         self.assertEqual(len(recent_calls), 1)
         self.assertTrue(set(job.TEMPS) <= set(recent_calls[0][4]))
-        temperature = snap["temperature"]
+        temperature = self.qa_log["temperature"]
         self.assertEqual(temperature["units"], {"T2M": "C", "T2M_MAX": "C", "T2M_MIN": "C"})
         self.assertEqual(sorted(temperature["days"]), sorted(snap["irradiance"]["days"]))
         self.assertEqual(temperature["days"]["2026-08-01"], {"T2M": 27.0, "T2M_MAX": 31.0, "T2M_MIN": 24.0})
@@ -343,7 +370,8 @@ class TemperatureStoredOnly(TrialCellRun):
                 del values["T2M_MIN"]  # NASA POWER left a parameter out
             return values, units, sources
 
-        days = self.run_job(patchy)["temperature"]["days"]
+        self.run_job(patchy)
+        days = self.qa_log["temperature"]["days"]
         self.assertEqual(days["2026-08-02"], {"T2M": 27.0, "T2M_MAX": None, "T2M_MIN": None})
 
     def test_l5_and_l8_inputs_ignore_temperature(self):

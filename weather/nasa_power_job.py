@@ -15,14 +15,14 @@ What a run does, for each grid cell holding at least one plot:
      WeatherKit resolves about 10 km, so it is fetched per ~11 km plot area (0.1° box), not per NASA cell:
      4 requests per area per day, so 1,000 areas ≈ 120k of the 500k monthly calls.
                                                                   → cells/<cell>/latest.json
-     Also in latest.json, log-only (no rule reads it): `irradiance_check`, NASA POWER's daily sunlight checked
-     against ALLSKY ≤ CLRSKY ≤ Ra over the last QA_LOOKBACK_DAYS (CLRSKY runs months behind, so the same single
-     request reaches further back; rain and P30 still start where they did).
-     Also stored only: `temperature` (T2M, T2M_MAX, T2M_MIN) over the same days as `irradiance`, for a future L5
-     water balance. latest.json is replaced every run, so this is the current window only: NASA POWER's own
-     archive is the history.
-  4. Index of plot → cell file and WeatherKit area.               → plots.json
-  5. Optional (--archive-forecast): today's WeatherKit forecast for plots marked "archive_forecast",
+  4. Backend-only QA log (the app never downloads it, so phones on a weak signal don't pay for it):
+     `irradiance_check`, NASA POWER's daily sunlight checked against ALLSKY ≤ CLRSKY ≤ Ra over the last
+     QA_LOOKBACK_DAYS (CLRSKY runs months behind, so the same single request reaches further back; rain and P30
+     still start where they did), and `temperature` (T2M, T2M_MAX, T2M_MIN) over the same days as `irradiance`,
+     for a future L5 water balance. Replaced every run, like latest.json: NASA POWER's own archive is the
+     history.                                                     → cells/<cell>/qa_log.json
+  5. Index of plot → cell file and WeatherKit area.               → plots.json
+  6. Optional (--archive-forecast): today's WeatherKit forecast for plots marked "archive_forecast",
      kept for scoring forecasts against BMKG data later.         → archive/forecast/<plot>/<date>.json
 
 Usage:
@@ -61,6 +61,7 @@ SUN = "ALLSKY_SFC_SW_DWN"  # logged only (design doc), no rule reads it
 SUN_CLEAR = "CLRSKY_SFC_SW_DWN"  # irradiance check only (L9, log-only)
 TEMPS = ("T2M", "T2M_MAX", "T2M_MIN")  # stored only, for a future L5 water balance; no rule reads them
 RECENT_PARAMS = (RAIN, SUN, SUN_CLEAR, *TEMPS)  # one daily request per cell carries them all
+QA_LOG_SCHEMA = 1  # cells/<cell>/qa_log.json, backend only
 CLIMATE_MAX_AGE_DAYS = 365
 GRID_LAT, GRID_LON = 0.5, 0.625  # NASA POWER rain grid (MERRA-2)
 WK_AREA = 0.1                    # WeatherKit P30 area, about 11 km: WeatherKit resolves about 10 km
@@ -262,8 +263,8 @@ def build_temperature(values, units):
     }
 
 
-def build_snapshot(cell, climate, recent, l5, areas, sun, units, sources, generated_at, irradiance_check=None,
-                   temperature=None):
+def build_snapshot(cell, climate, recent, l5, areas, sun, units, sources, generated_at):
+    """latest.json, schema 2: what the app downloads at sync."""
     return {
         "schema": SCHEMA_VERSION,
         "generated_at": generated_at,
@@ -275,8 +276,17 @@ def build_snapshot(cell, climate, recent, l5, areas, sun, units, sources, genera
         "irradiance": {"param": SUN, "unit": units.get(SUN),
                        "days": {d.isoformat(): v for d, v in sorted(sun.items()) if v is not None}},
         "nasa_power_sources": sources,
-        "irradiance_check": irradiance_check,  # optional, log-only (L9)
-        "temperature": temperature,            # optional, stored only (future L5 water balance)
+    }
+
+
+def build_qa_log(cell, irradiance_check, temperature, generated_at):
+    """qa_log.json: the cell's log-only data. No rule reads it and the app never downloads it."""
+    return {
+        "schema": QA_LOG_SCHEMA,
+        "generated_at": generated_at,
+        "cell": {"id": cell["id"], "lat": cell["lat"], "lon": cell["lon"]},
+        "irradiance_check": irradiance_check,  # L9, log-only
+        "temperature": temperature,            # stored only, for a future L5 water balance
     }
 
 
@@ -364,11 +374,11 @@ def run(plots, out, today, *, session, weatherkit=None, refresh_climate=False, a
                                          "rain_mm": {d.isoformat(): v for d, v in sorted(area_rain[area["id"]].items())}}
             l5 = build_l5([{"plot_id": p, "area": plot_area[p]["id"]} for p in cell["plots"]], area_rain, recent, today)
 
-            snapshot = build_snapshot(cell, climate, recent, l5, areas, values.get(SUN, {}), units, sources, generated_at,
-                                      irradiance_check=check_cell_irradiance(fetched, cell),
-                                      temperature=build_temperature(values, units))
+            snapshot = build_snapshot(cell, climate, recent, l5, areas, values.get(SUN, {}), units, sources, generated_at)
+            qa_log = build_qa_log(cell, check_cell_irradiance(fetched, cell), build_temperature(values, units), generated_at)
             write_json(out / "cells" / cell["id"] / "latest.json", snapshot)
-            check = snapshot["irradiance_check"]
+            write_json(out / "cells" / cell["id"] / "qa_log.json", qa_log)
+            check = qa_log["irradiance_check"]
             log.info("%s: %d plot(s), NASA rain to %s, suspect %s; P30 %s; irradiance flags %s", cell["id"],
                      len(cell["plots"]), recent["last_day"], recent["suspect_months"] or "none",
                      ", ".join(f"{p} {r['p30_mm']} ({r['p30_source']}, {r['p30_quality']})" for p, r in l5.items()),
