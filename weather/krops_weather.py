@@ -1,6 +1,7 @@
 """Shared plumbing for the Krops weather notebooks: config, API clients, caching, loaders and scoring.
 
-The L5 and L8 rules themselves live in the notebooks, where they are explained step by step.
+The L5 and L8 rules are explained step by step in notebooks 1 and 2; krops_rules.py is the reference the backend
+and the Swift app run.
 """
 import json
 import os
@@ -115,14 +116,18 @@ def _utc(day):
     return start.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def fetch_weatherkit_daily(start=None, end=None):
-    """forecastDaily for the site. No dates = the live forecast; start/end = those days (inclusive)."""
+def fetch_weatherkit_daily(start=None, end=None, forever=None):
+    """forecastDaily for the site. No dates = the live forecast; start/end = those days (inclusive).
+
+    forever=True reuses any saved response (to rerun on an earlier day's data); None = only for days over 30 days old.
+    """
     params = {"dataSets": "forecastDaily", "timezone": str(TZ), "countryCode": COUNTRY}
     if start:
         params |= {"dailyStart": _utc(start), "dailyEnd": _utc(end + timedelta(days=1))}
     kind = "forecast" if start is None else f"daily_{start:%Y%m%d}_{end:%Y%m%d}"
-    return cached("weatherkit", kind, lambda: wk_get(f"/api/v1/weather/en/{LAT}/{LON}", params),
-                  forever=start is not None and _is_past(end))
+    if forever is None:
+        forever = start is not None and _is_past(end)
+    return cached("weatherkit", kind, lambda: wk_get(f"/api/v1/weather/en/{LAT}/{LON}", params), forever=forever)
 
 
 def tidy_weatherkit_days(payload):
@@ -135,16 +140,19 @@ def tidy_weatherkit_days(payload):
             "rain_chance": d.get("precipitationChance"),
             "daytime_rain_mm": daytime.get("precipitationAmount"),
             "daytime_rain_chance": daytime.get("precipitationChance"),
+            "tmax_c": d.get("temperatureMax"),
+            "tmin_c": d.get("temperatureMin"),
         })
-    return pd.DataFrame(rows, columns=["date", "rain_mm", "rain_chance", "daytime_rain_mm", "daytime_rain_chance"])
+    return pd.DataFrame(rows, columns=["date", "rain_mm", "rain_chance", "daytime_rain_mm", "daytime_rain_chance",
+                                       "tmax_c", "tmin_c"])
 
 
-def fetch_weatherkit_history(start, end, chunk_days=10):
+def fetch_weatherkit_history(start, end, chunk_days=10, forever=None):
     """Past daily values (from 1 Aug 2021), 10 days per request. Model values, not observations."""
     parts, day = [], start
     while day <= end:
         stop = min(day + timedelta(days=chunk_days - 1), end)
-        parts.append(tidy_weatherkit_days(fetch_weatherkit_daily(day, stop)))
+        parts.append(tidy_weatherkit_days(fetch_weatherkit_daily(day, stop, forever)))
         day = stop + timedelta(days=1)
     df = pd.concat(parts).drop_duplicates("date").set_index("date").sort_index()
     return df[(df.index >= start) & (df.index <= end)]
@@ -175,8 +183,11 @@ def load_forecast_snapshots():
 POWER_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
 
 
-def fetch_nasa_power(start, end, params=("PRECTOTCORR", "ALLSKY_SFC_SW_DWN", "CLRSKY_SFC_SW_DWN")):
-    """Daily values for the site; fill values (−999) become missing. Returns (frame, units, sources)."""
+def fetch_nasa_power(start, end, params=("PRECTOTCORR", "ALLSKY_SFC_SW_DWN", "CLRSKY_SFC_SW_DWN"), forever=None):
+    """Daily values for the site; fill values (−999) become missing. Returns (frame, units, sources).
+
+    forever=True reuses any saved response for the same request; None = only when `end` is over 30 days old.
+    """
     def fetch():
         r = requests.get(POWER_URL, params={
             "parameters": ",".join(params),
@@ -191,7 +202,7 @@ def fetch_nasa_power(start, end, params=("PRECTOTCORR", "ALLSKY_SFC_SW_DWN", "CL
         return r.json()
 
     kind = f"daily_{start:%Y%m%d}_{end:%Y%m%d}_{len(params)}p"
-    payload = cached("nasa-power", kind, fetch, forever=_is_past(end))
+    payload = cached("nasa-power", kind, fetch, forever=_is_past(end) if forever is None else forever)
     df = pd.DataFrame(payload["properties"]["parameter"])
     df.index = pd.to_datetime(df.index, format="%Y%m%d").date
     df = df.mask(df == payload["header"]["fill_value"])
