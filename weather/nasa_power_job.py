@@ -26,7 +26,11 @@ What a run does, for each grid cell holding at least one plot:
      for a future L5 water balance. Replaced every run, like latest.json: NASA POWER's own archive is the
      history.                                                     → cells/<cell>/qa_log.json
   5. Index of plot → cell file and WeatherKit area.               → plots.json
-  6. Optional (--archive-forecast): today's WeatherKit forecast for plots marked "archive_forecast",
+     Steps 3 and 5 are schema 2, written while WRITE_SCHEMA2 is on (until the Swift app reads schema 3).
+  6. Schema 3, one file per plot holding only what L5 and L8 need on that phone (SCHEMA3.md); the folder is an HMAC
+     of the plot id under PLOT_KEY_SECRET, so it can't be guessed. Skipped without the secret.
+                                                                  → plots/<plot_key>/latest.json
+  7. Optional (--archive-forecast): today's WeatherKit forecast for plots marked "archive_forecast",
      kept for scoring forecasts against BMKG data later.         → archive/forecast/<plot>/<date>.json
 
 Usage:
@@ -40,6 +44,8 @@ app never reads a half-written file.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import json
 import logging
 import math
@@ -59,6 +65,19 @@ HERE = Path(__file__).resolve().parent
 log = logging.getLogger("nasa_power_job")
 
 SCHEMA_VERSION = 2
+SCHEMA3_VERSION = 3
+WRITE_SCHEMA2 = True  # keep writing cells/<cell>/latest.json and plots.json until the Swift app reads schema 3
+PLOT_KEY_HEX = 32     # 128 bits of the HMAC-SHA256: unguessable, short enough for a path
+SCHEMA3_L5_FIELDS = ("p30_mm", "p30_start_date", "p30_end_date", "p30_source", "p30_quality", "water_stress",
+                     "p30_missing_days")
+ATTRIBUTION = {
+    "weatherkit-history": {"source": "apple-weather", "text": "Apple Weather",
+                           "url": "https://developer.apple.com/weatherkit/data-source-attribution/"},
+    "nasa-power": {"source": "nasa-power",
+                   "text": "These data were obtained from the NASA Langley Research Center (LaRC) POWER Project "
+                           "funded through the NASA Earth Science/Applied Science Program.",
+                   "url": "https://power.larc.nasa.gov"},
+}
 POWER_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
 RAIN = "PRECTOTCORR"
 SUN = "ALLSKY_SFC_SW_DWN"  # logged only (design doc), no rule reads it
@@ -335,6 +354,31 @@ def build_snapshot(cell, climate, recent, l5, areas, sun, units, sources, genera
     }
 
 
+def plot_key(plot_id, secret):
+    """The schema-3 folder for a plot: HMAC-SHA256 of its id under the server's secret, as hex.
+
+    Stable for a plot, unguessable and unlinkable to the id without the secret; the backend can recompute it any
+    time, so no table of keys is stored. The app learns its key from the backend (enrolment), never the secret.
+    """
+    return hmac.new(secret.encode(), str(plot_id).encode(), hashlib.sha256).hexdigest()[:PLOT_KEY_HEX]
+
+
+def build_schema3(l5_record, climate, generated_at):
+    """plots/<plot_key>/latest.json, schema 3: only what L5 and L8 read on this plot's phone (SCHEMA3.md).
+
+    Nothing about other plots and no location: the L5 record without its WeatherKit area, Stage A's month averages
+    (l8_decision reads only avg_mm), and attribution for the data the file carries.
+    """
+    sources = ["weatherkit-history"] if l5_record["p30_source"] == "weatherkit-history" else []
+    return {
+        "schema": SCHEMA3_VERSION,
+        "generated_at": generated_at,
+        "l5": {k: l5_record[k] for k in SCHEMA3_L5_FIELDS},
+        "stage_a": {m: {"avg_mm": row["avg_mm"]} for m, row in climate["stage_a"].items()},
+        "attribution": [ATTRIBUTION[s] for s in sources + ["nasa-power"]],
+    }
+
+
 def build_qa_log(cell, irradiance_check, temperature, generated_at):
     """qa_log.json: the cell's log-only data. No rule reads it and the app never downloads it."""
     return {
@@ -400,9 +444,11 @@ def fetch_area_rain(weatherkit, area, today):
 
 
 def run(plots, out, today, *, session, weatherkit=None, refresh_climate=False, archive_forecast=False,
-        fetch=fetch_nasa_power):
+        fetch=fetch_nasa_power, plot_key_secret=None, write_schema2=WRITE_SCHEMA2):
     """Process every cell; returns the number of cells that failed."""
     out = Path(out)
+    if not plot_key_secret:
+        log.warning("PLOT_KEY_SECRET not set: schema-3 plot files not written")
     cells = group_plots(plots)
     plot_area = {p["plot_id"]: weatherkit_area(float(p["lat"]), float(p["lon"])) for p in plots}
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -445,8 +491,13 @@ def run(plots, out, today, *, session, weatherkit=None, refresh_climate=False, a
 
             snapshot = build_snapshot(cell, climate, recent, l5, areas, values.get(SUN, {}), units, sources, generated_at)
             qa_log = build_qa_log(cell, check_cell_irradiance(fetched, cell), build_temperature(values, units), generated_at)
-            write_json(out / "cells" / cell["id"] / "latest.json", snapshot)
+            if write_schema2:
+                write_json(out / "cells" / cell["id"] / "latest.json", snapshot)
             write_json(out / "cells" / cell["id"] / "qa_log.json", qa_log)
+            if plot_key_secret:
+                for plot_id, record in l5.items():
+                    write_json(out / "plots" / plot_key(plot_id, plot_key_secret) / "latest.json",
+                               build_schema3(record, climate, generated_at))
             check = qa_log["irradiance_check"]
             log.info("%s: %d plot(s), NASA rain to %s, suspect %s; P30 %s; irradiance flags %s", cell["id"],
                      len(cell["plots"]), recent["last_day"], recent["suspect_months"] or "none",
@@ -456,11 +507,12 @@ def run(plots, out, today, *, session, weatherkit=None, refresh_climate=False, a
             failed += 1
             log.exception("%s: failed", cell["id"])
 
-    index = {p["plot_id"]: {"cell": grid_cell(float(p["lat"]), float(p["lon"]))["id"],
-                            "weatherkit_area": plot_area[p["plot_id"]]["id"]} for p in plots}
-    for entry in index.values():
-        entry["path"] = f"cells/{entry['cell']}/latest.json"
-    write_json(out / "plots.json", {"schema": SCHEMA_VERSION, "generated_at": generated_at, "plots": index})
+    if write_schema2:
+        index = {p["plot_id"]: {"cell": grid_cell(float(p["lat"]), float(p["lon"]))["id"],
+                                "weatherkit_area": plot_area[p["plot_id"]]["id"]} for p in plots}
+        for entry in index.values():
+            entry["path"] = f"cells/{entry['cell']}/latest.json"
+        write_json(out / "plots.json", {"schema": SCHEMA_VERSION, "generated_at": generated_at, "plots": index})
 
     if archive_forecast:
         if not weatherkit:
@@ -504,7 +556,8 @@ def main(argv=None):
     weatherkit = None if args.no_weatherkit else WeatherKit.from_env(session, tz)
     log.info("%d plot(s), WeatherKit check %s", len(plots), "on" if weatherkit else "off")
     failed = run(plots, args.out, today, session=session, weatherkit=weatherkit,
-                 refresh_climate=args.refresh_climate, archive_forecast=args.archive_forecast)
+                 plot_key_secret=os.getenv("PLOT_KEY_SECRET"), refresh_climate=args.refresh_climate,
+                 archive_forecast=args.archive_forecast)
     if weatherkit:
         log.info("WeatherKit requests this run: %d (%d retries for short replies)", weatherkit.calls, weatherkit.retries)
     return 1 if failed else 0

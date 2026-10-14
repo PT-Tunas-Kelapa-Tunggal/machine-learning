@@ -14,6 +14,8 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import nasa_power_job as job  # noqa: E402
 
+SECRET = "made-up-secret-for-tests"  # names schema-3 folders in these runs
+
 
 def days(start, values):
     return {start + timedelta(days=i): v for i, v in enumerate(values)}
@@ -108,7 +110,7 @@ class FullRun(unittest.TestCase):
     def test_run_writes_cell_files_and_index(self):
         plots = [{"plot_id": "a", "lat": 0.92, "lon": 104.45}, {"plot_id": "b", "lat": 0.95, "lon": 104.40}]
         with tempfile.TemporaryDirectory() as out:
-            failed = job.run(plots, out, date(2026, 10, 11), session=None, fetch=self.fake_fetch)
+            failed = job.run(plots, out, date(2026, 10, 11), session=None, plot_key_secret=SECRET, fetch=self.fake_fetch)
             self.assertEqual(failed, 0)
             self.assertEqual(len(self.calls), 2)  # one climate + one recent request for the shared cell
             snapshot = json.loads((Path(out) / "cells/n1.000_e104.3750/latest.json").read_text())
@@ -126,7 +128,7 @@ class FullRun(unittest.TestCase):
             self.assertEqual(index["plots"]["a"]["weatherkit_area"], "n0.900_e104.5000")
 
             # Second run the same day reuses the climate table: only the recent request is made
-            job.run(plots, out, date(2026, 10, 11), session=None, fetch=self.fake_fetch)
+            job.run(plots, out, date(2026, 10, 11), session=None, plot_key_secret=SECRET, fetch=self.fake_fetch)
             self.assertEqual(len(self.calls), 3)
 
     def test_a_failing_cell_is_counted_and_others_still_written(self):
@@ -138,7 +140,7 @@ class FullRun(unittest.TestCase):
         plots = [{"plot_id": "ok", "lat": 0.92, "lon": 104.45}, {"plot_id": "bad", "lat": 0.40, "lon": 104.45}]
         with tempfile.TemporaryDirectory() as out:
             with self.assertLogs("nasa_power_job", level="ERROR"):
-                failed = job.run(plots, out, date(2026, 10, 11), session=None, fetch=flaky)
+                failed = job.run(plots, out, date(2026, 10, 11), session=None, plot_key_secret=SECRET, fetch=flaky)
             self.assertEqual(failed, 1)
             self.assertTrue((Path(out) / "cells/n1.000_e104.3750/latest.json").is_file())
 
@@ -170,7 +172,7 @@ class WeatherKitFirst(unittest.TestCase):
     def run_job(self, plots, weatherkit):
         out = tempfile.TemporaryDirectory()
         self.addCleanup(out.cleanup)
-        failed = job.run(plots, out.name, self.TODAY, session=None, weatherkit=weatherkit, fetch=self.nasa)
+        failed = job.run(plots, out.name, self.TODAY, session=None, plot_key_secret=SECRET, weatherkit=weatherkit, fetch=self.nasa)
         self.assertEqual(failed, 0)
         cell = job.grid_cell(plots[0]["lat"], plots[0]["lon"])["id"]
         return json.loads((Path(out.name) / "cells" / cell / "latest.json").read_text())
@@ -357,7 +359,7 @@ class TrialCellRun(unittest.TestCase):
     def run_job(self, fetch):
         out = tempfile.TemporaryDirectory()
         self.addCleanup(out.cleanup)
-        failed = job.run(self.PLOTS, out.name, self.TODAY, session=None, fetch=fetch)
+        failed = job.run(self.PLOTS, out.name, self.TODAY, session=None, plot_key_secret=SECRET, fetch=fetch)
         self.assertEqual(failed, 0)
         cell = Path(out.name) / "cells/n1.000_e104.3750"
         self.qa_log = json.loads((cell / "qa_log.json").read_text())
@@ -383,7 +385,7 @@ class LeanLatestJson(TrialCellRun):
 
     def test_the_index_points_only_at_latest_json(self):
         with tempfile.TemporaryDirectory() as out:
-            job.run(self.PLOTS, out, self.TODAY, session=None, fetch=self.fetch)
+            job.run(self.PLOTS, out, self.TODAY, session=None, plot_key_secret=SECRET, fetch=self.fetch)
             entry = json.loads((Path(out) / "plots.json").read_text())["plots"]["a"]
         self.assertEqual(sorted(entry), ["cell", "path", "weatherkit_area"])
         self.assertTrue(entry["path"].endswith("latest.json"))
@@ -472,6 +474,99 @@ class TemperatureStoredOnly(TrialCellRun):
         snap = self.run_job(hot)
         self.assertEqual(snap["l5"]["a"]["p30_mm"], 90.0)
         self.assertEqual(snap["climate"]["stage_a"]["10"]["gate"], "open")
+
+
+SCHEMA3_DIR = Path(__file__).with_name("fixtures") / "schema3"
+try:
+    import jsonschema
+except ImportError:  # the schema-3 tests that don't need it still run
+    jsonschema = None
+
+
+class Schema3(unittest.TestCase):
+    """Per-plot files: only what L5 and L8 read on that plot's phone, in a folder nobody can guess."""
+
+    TODAY = date(2026, 10, 11)
+    PLOTS = [{"plot_id": "plot-alpha", "lat": 0.01, "lon": 0.01}, {"plot_id": "plot-bravo", "lat": 0.02, "lon": 0.03}]
+
+    def setUp(self):
+        self.calls = []
+
+    def fetch(self, lat, lon, start, end, params, session):
+        return FullRun.fake_fetch(self, lat, lon, start, end, params, session)
+
+    def run_job(self, **kwargs):
+        out = tempfile.TemporaryDirectory()
+        self.addCleanup(out.cleanup)
+        self.assertEqual(job.run(self.PLOTS, out.name, self.TODAY, session=None, fetch=self.fetch, **kwargs), 0)
+        return Path(out.name)
+
+    def test_each_plot_gets_only_its_own_record(self):
+        out = self.run_job(plot_key_secret=SECRET)
+        cell = json.loads(next((out / "cells").glob("*/latest.json")).read_text())
+        for plot in self.PLOTS:
+            path = out / "plots" / job.plot_key(plot["plot_id"], SECRET) / "latest.json"
+            text = path.read_text()
+            mine = json.loads(text)
+            self.assertEqual(list(mine), ["schema", "generated_at", "l5", "stage_a", "attribution"])
+            self.assertEqual((mine["schema"], mine["generated_at"]), (3, cell["generated_at"]))
+            self.assertEqual(mine["l5"], {k: v for k, v in cell["l5"][plot["plot_id"]].items() if k != "weatherkit_area"})
+            self.assertEqual(mine["stage_a"]["10"], {"avg_mm": cell["climate"]["stage_a"]["10"]["avg_mm"]})
+            for leak in ("plot-alpha", "plot-bravo", "weatherkit_area", '"lat"', '"lon"', "cell", "gate", "in_band"):
+                self.assertNotIn(leak, text)
+
+    def test_the_folder_is_an_hmac_of_the_plot_id(self):
+        out = self.run_job(plot_key_secret=SECRET)
+        keys = sorted(p.name for p in (out / "plots").iterdir())
+        self.assertEqual(keys, sorted(job.plot_key(p["plot_id"], SECRET) for p in self.PLOTS))
+        key = job.plot_key("plot-alpha", SECRET)
+        self.assertRegex(key, r"^[0-9a-f]{32}$")
+        self.assertEqual(key, job.plot_key("plot-alpha", SECRET))              # stable
+        self.assertNotEqual(key, job.plot_key("plot-alpha", "another-secret"))  # nothing without the secret
+        self.assertNotEqual(key, job.plot_key("plot-alphb", SECRET))
+
+    def test_without_a_secret_only_schema_2_is_written(self):
+        with self.assertLogs("nasa_power_job", level="WARNING") as logs:
+            out = self.run_job()
+        self.assertFalse((out / "plots").exists())
+        self.assertTrue((out / "plots.json").is_file())
+        self.assertIn("PLOT_KEY_SECRET not set", logs.output[0])
+
+    def test_schema_2_can_be_switched_off(self):
+        out = self.run_job(plot_key_secret=SECRET, write_schema2=False)
+        self.assertFalse((out / "plots.json").exists())
+        self.assertEqual(list((out / "cells").glob("*/latest.json")), [])
+        self.assertEqual(len(list((out / "plots").glob("*/latest.json"))), 2)
+        self.assertEqual(len(list((out / "cells").glob("*/qa_log.json"))), 1)  # backend-only, kept either way
+
+    def test_attribution_follows_the_data(self):
+        inputs = json.loads((SCHEMA3_DIR / "inputs.json").read_text())
+        sources = {name: [a["source"] for a in job.build_schema3(r, inputs["climate"], inputs["generated_at"])["attribution"]]
+                   for name, r in inputs["records"].items()}
+        self.assertEqual(sources, {"normal": ["apple-weather", "nasa-power"], "weatherkit_fallback": ["nasa-power"],
+                                   "null_p30": ["nasa-power"]})
+
+    def test_the_fixtures_are_what_the_job_writes(self):
+        inputs = json.loads((SCHEMA3_DIR / "inputs.json").read_text())
+        for name, record in inputs["records"].items():
+            with self.subTest(name):
+                expected = json.loads((SCHEMA3_DIR / f"{name}.json").read_text())
+                self.assertEqual(job.build_schema3(record, inputs["climate"], inputs["generated_at"]), expected)
+
+    @unittest.skipUnless(jsonschema, "jsonschema not installed")
+    def test_files_match_the_json_schema(self):
+        validator = jsonschema.Draft202012Validator(json.loads((Path(job.HERE) / "schema3.schema.json").read_text()))
+        out = self.run_job(plot_key_secret=SECRET)
+        files = [json.loads(p.read_text()) for p in (out / "plots").glob("*/latest.json")]
+        files += [json.loads((SCHEMA3_DIR / f"{n}.json").read_text()) for n in ("normal", "weatherkit_fallback", "null_p30")]
+        for f in files:
+            self.assertEqual([e.message for e in validator.iter_errors(f)], [])
+        normal = json.loads((SCHEMA3_DIR / "normal.json").read_text())
+        broken = [normal | {"cell": {"plots": ["x"]}},                                            # nothing extra
+                  normal | {"l5": normal["l5"] | {"p30_quality": "none"}},                         # none means null values
+                  normal | {"attribution": [a for a in normal["attribution"] if a["source"] != "apple-weather"]}]
+        for f in broken:
+            self.assertFalse(validator.is_valid(f))
 
 
 if __name__ == "__main__":
