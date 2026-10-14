@@ -203,15 +203,41 @@ class WeatherKit:
     def _utc(self, day):
         return datetime.combine(day, datetime.min.time(), self.tz).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def daily(self, lat, lon, start=None, end=None):
-        params = {"dataSets": "forecastDaily", "timezone": str(self.tz)}
-        if start:
-            params |= {"dailyStart": self._utc(start), "dailyEnd": self._utc(end + timedelta(days=1))}
+    def _get(self, lat, lon, params):
         r = self.session.get(f"{self.BASE}/api/v1/weather/en/{lat}/{lon}", params=params,
                              headers={"Authorization": f"Bearer {self._token()}"}, timeout=30)
         self.calls += 1
         r.raise_for_status()
         return r.json()
+
+    def daily(self, lat, lon, start=None, end=None):
+        params = {"dataSets": "forecastDaily", "timezone": str(self.tz)}
+        if start:
+            params |= {"dailyStart": self._utc(start), "dailyEnd": self._utc(end + timedelta(days=1))}
+        return self._get(lat, lon, params)
+
+    def hourly(self, lat, lon, start, end):
+        """Past hourly values for the hours starting in [start, end) (aware datetimes, one request).
+
+        Returns {hour start (UTC): {"cloud_cover", "rain_mm", "daylight", "condition"}}. An hour returned twice keeps a
+        value only if the copies agree (rules.daily_from_pairs), as daily rain does.
+        """
+        stamp = "%Y-%m-%dT%H:%M:%SZ"
+        reply = self._get(lat, lon, {"dataSets": "forecastHourly", "timezone": str(self.tz),
+                                     "hourlyStart": start.astimezone(timezone.utc).strftime(stamp),
+                                     "hourlyEnd": end.astimezone(timezone.utc).strftime(stamp)})
+        hours = []
+        for h in reply.get("forecastHourly", {}).get("hours", []):
+            t = datetime.fromisoformat(h["forecastStart"].replace("Z", "+00:00"))
+            if start <= t < end:
+                hours.append((t, h))
+        cloud = rules.daily_from_pairs((t, h.get("cloudCover")) for t, h in hours)
+        rain = rules.daily_from_pairs((t, h.get("precipitationAmount")) for t, h in hours)
+        first = {}
+        for t, h in hours:
+            first.setdefault(t, h)
+        return {t: {"cloud_cover": cloud[t], "rain_mm": rain[t], "daylight": first[t].get("daylight"),
+                    "condition": first[t].get("conditionCode")} for t in sorted(first)}
 
     def _days(self, lat, lon, first, last, start, end):
         """(local date, mm) for the days one request for first–last returns, kept when they fall inside start–end."""

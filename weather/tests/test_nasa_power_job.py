@@ -283,6 +283,56 @@ class WeatherKitRetry(unittest.TestCase):
         self.assertEqual(job._spans([]), [])
 
 
+HOURLY = json.loads((Path(__file__).with_name("fixtures") / "weatherkit_hourly_2023-06-01.json").read_text())
+
+
+class RecordedSession:
+    """Answers every GET with one recorded WeatherKit reply and remembers the query."""
+
+    def __init__(self, reply):
+        self.reply, self.params = reply, []
+
+    def get(self, url, params=None, headers=None, timeout=None):
+        self.params.append(params)
+        reply = self.reply
+        return type("Reply", (), {"raise_for_status": lambda self: None, "json": lambda self: reply})()
+
+
+class WeatherKitHourly(unittest.TestCase):
+    """Past hourly values, parsed from the recorded reply for 1 Jun 2023 (a wet morning)."""
+
+    TZ = ZoneInfo("Asia/Jakarta")
+    START = datetime(2023, 6, 1, tzinfo=ZoneInfo("Asia/Jakarta"))
+
+    def client(self, hours):
+        wk = job.WeatherKit.__new__(job.WeatherKit)
+        wk.tz, wk.calls, wk._token = self.TZ, 0, lambda: "made-up-token"
+        wk.session = RecordedSession({"forecastHourly": {"hours": hours}})
+        return wk
+
+    def test_the_recorded_day_parses_hour_by_hour(self):
+        wk = self.client(HOURLY["hours"])
+        hours = wk.hourly(0.0, 0.0, self.START, self.START + timedelta(days=1))
+        self.assertEqual(len(hours), 24)
+        nine = datetime(2023, 6, 1, 2, tzinfo=timezone.utc)  # 09:00 WIB
+        self.assertEqual(hours[nine], {"cloud_cover": 0.92, "rain_mm": 5.19, "daylight": True, "condition": "Rain"})
+        self.assertEqual(wk.session.params[0]["dataSets"], "forecastHourly")
+        self.assertEqual((wk.session.params[0]["hourlyStart"], wk.calls), (HOURLY["hourlyStart"], 1))
+
+    def test_only_hours_inside_the_range_are_kept(self):
+        wk = self.client(HOURLY["hours"])
+        start = datetime(2023, 6, 1, 9, tzinfo=self.TZ)
+        hours = wk.hourly(0.0, 0.0, start, start + timedelta(hours=3))
+        self.assertEqual([t.astimezone(self.TZ).hour for t in hours], [9, 10, 11])
+
+    def test_an_hour_given_twice_keeps_only_values_that_agree(self):
+        nine = next(h for h in HOURLY["hours"] if h["forecastStart"] == "2023-06-01T02:00:00Z")
+        twice = HOURLY["hours"] + [nine | {"precipitationAmount": 0.0}]  # same cloud, different rain
+        hours = self.client(twice).hourly(0.0, 0.0, self.START, self.START + timedelta(days=1))
+        t = datetime(2023, 6, 1, 2, tzinfo=timezone.utc)
+        self.assertEqual((hours[t]["cloud_cover"], hours[t]["rain_mm"]), (0.92, None))
+
+
 class ScriptedWeatherKit(job.WeatherKit):
     """The real history() over scripted daily() replies: no key, no network.
 
