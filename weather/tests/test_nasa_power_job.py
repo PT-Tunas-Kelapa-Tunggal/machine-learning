@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import nasa_power_job as job  # noqa: E402
@@ -84,7 +85,9 @@ class FullRun(unittest.TestCase):
             return {job.RAIN: climate_rain()}, {job.RAIN: "mm/day"}, ["MERRA2"]
         rain = {start + timedelta(days=i): 3.0 for i in range((end - start).days - 2)}  # 3 days behind
         sun = {d: 20.0 for d in rain}
-        return {job.RAIN: rain, job.SUN: sun}, {job.RAIN: "mm/day", job.SUN: "MJ/m^2/day"}, ["MERRA2"]
+        clear = {d: 24.0 for d in rain if d <= end - timedelta(days=73)}  # CLRSKY runs ~73 days behind
+        return ({job.RAIN: rain, job.SUN: sun, job.SUN_CLEAR: clear},
+                {job.RAIN: "mm/day", job.SUN: "MJ/m^2/day", job.SUN_CLEAR: "MJ/m^2/day"}, ["MERRA2"])
 
     def test_run_writes_cell_files_and_index(self):
         plots = [{"plot_id": "a", "lat": 0.92, "lon": 104.45}, {"plot_id": "b", "lat": 0.95, "lon": 104.40}]
@@ -194,6 +197,68 @@ class WeatherKitFirst(unittest.TestCase):
         recent = job.build_recent(days(date(2026, 9, 1), [40.0] * 40), normals)  # NASA months all suspect
         l5 = job.build_l5([{"plot_id": "a", "area": "x"}], {"x": None}, recent, self.TODAY)["a"]
         self.assertEqual((l5["p30_quality"], l5["p30_mm"], l5["water_stress"]), ("none", None, None))
+
+
+class IrradianceCheckInTheJob(unittest.TestCase):
+    """The log-only irradiance check reaches further back in the same request, without touching L5."""
+
+    TODAY = date(2026, 10, 11)
+    PLOTS = [{"plot_id": "a", "lat": 0.92, "lon": 104.45}]
+
+    def setUp(self):
+        self.calls = []
+
+    def run_job(self, fetch):
+        out = tempfile.TemporaryDirectory()
+        self.addCleanup(out.cleanup)
+        failed = job.run(self.PLOTS, out.name, self.TODAY, session=None, fetch=fetch)
+        self.assertEqual(failed, 0)
+        return json.loads((Path(out.name) / "cells/n1.000_e104.3750/latest.json").read_text())
+
+    def fetch(self, lat, lon, start, end, params, session):
+        return FullRun.fake_fetch(self, lat, lon, start, end, params, session)
+
+    def test_one_request_reaches_back_but_rain_and_irradiance_start_where_they_did(self):
+        snap = self.run_job(self.fetch)
+        recent_calls = [c for c in self.calls if c[2].year != 1991]
+        self.assertEqual(len(recent_calls), 1)
+        self.assertEqual(recent_calls[0][2], self.TODAY - timedelta(days=job.QA_LOOKBACK_DAYS))
+        self.assertIn(job.SUN_CLEAR, recent_calls[0][4])
+        self.assertEqual(min(snap["recent_rain"]["rain_mm"]), "2026-08-01")  # 1st of the month holding today − 45
+        self.assertEqual(min(snap["irradiance"]["days"]), "2026-08-01")
+        check = snap["irradiance_check"]
+        self.assertEqual((check["first_day"], check["status"], check["days_flagged"]), ("2026-06-13", "log-only", 0))
+        self.assertGreater(check["days_with_clrsky"], 0)
+
+    def test_rain_before_the_recent_window_cannot_reach_l5(self):
+        def wet_past(lat, lon, start, end, params, session):
+            values, units, sources = self.fetch(lat, lon, start, end, params, session)
+            if start.year != 1991:
+                values[job.RAIN] = {d: (999.0 if d < date(2026, 8, 1) else v) for d, v in values[job.RAIN].items()}
+            return values, units, sources
+
+        snap = self.run_job(wet_past)
+        self.assertEqual(snap["recent_rain"]["suspect_months"], [])
+        self.assertEqual(snap["recent_rain"]["nasa_p30"]["p30_mm"], 90.0)
+        self.assertEqual(snap["l5"]["a"]["p30_mm"], 90.0)
+
+    def test_a_broken_irradiance_day_is_flagged_not_fatal(self):
+        def broken(lat, lon, start, end, params, session):
+            values, units, sources = self.fetch(lat, lon, start, end, params, session)
+            if start.year != 1991:
+                values[job.SUN][date(2026, 7, 1)] = 30.0  # over that day's CLRSKY of 24
+            return values, units, sources
+
+        flagged = self.run_job(broken)["irradiance_check"]["flagged"]
+        self.assertEqual(list(flagged), ["2026-07-01"])
+        self.assertEqual(flagged["2026-07-01"]["codes"], ["allsky_gt_clrsky"])
+
+    def test_a_failing_check_is_written_as_null(self):
+        with mock.patch.object(job.irradiance, "check_irradiance", side_effect=RuntimeError("bad maths")):
+            with self.assertLogs("nasa_power_job", level="WARNING"):
+                snap = self.run_job(self.fetch)
+        self.assertIsNone(snap["irradiance_check"])
+        self.assertEqual(snap["l5"]["a"]["p30_mm"], 90.0)
 
 
 if __name__ == "__main__":

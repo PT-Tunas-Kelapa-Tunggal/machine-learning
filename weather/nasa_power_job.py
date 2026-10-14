@@ -13,6 +13,9 @@ What a run does, for each grid cell holding at least one plot:
      WeatherKit resolves about 10 km, so it is fetched per ~11 km plot area (0.1° box), not per NASA cell:
      4 requests per area per day, so 1,000 areas ≈ 120k of the 500k monthly calls.
                                                                   → cells/<cell>/latest.json
+     Also in latest.json, log-only (no rule reads it): `irradiance_check`, NASA POWER's daily sunlight checked
+     against ALLSKY ≤ CLRSKY ≤ Ra over the last QA_LOOKBACK_DAYS (CLRSKY runs months behind, so the same single
+     request reaches further back; rain and P30 still start where they did).
   4. Index of plot → cell file and WeatherKit area.               → plots.json
   5. Optional (--archive-forecast): today's WeatherKit forecast for plots marked "archive_forecast",
      kept for scoring forecasts against BMKG data later.         → archive/forecast/<plot>/<date>.json
@@ -41,6 +44,7 @@ from zoneinfo import ZoneInfo
 import requests
 
 import krops_rules as rules
+import l9_irradiance_check as irradiance
 
 HERE = Path(__file__).resolve().parent
 log = logging.getLogger("nasa_power_job")
@@ -49,10 +53,12 @@ SCHEMA_VERSION = 2
 POWER_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
 RAIN = "PRECTOTCORR"
 SUN = "ALLSKY_SFC_SW_DWN"  # logged only (design doc), no rule reads it
+SUN_CLEAR = "CLRSKY_SFC_SW_DWN"  # irradiance check only (L9, log-only)
 CLIMATE_MAX_AGE_DAYS = 365
 GRID_LAT, GRID_LON = 0.5, 0.625  # NASA POWER rain grid (MERRA-2)
 WK_AREA = 0.1                    # WeatherKit P30 area, about 11 km: WeatherKit resolves about 10 km
 WK_P30_DAYS = 37                 # 30-day window plus the 7 days P30 may lag behind (rules.P30_MAX_AGE_DAYS)
+QA_LOOKBACK_DAYS = 120  # GUESS – no source yet: CLRSKY ran ~73 days behind on 11 Oct 2026; 120 leaves ~45 days to check
 
 
 # ============================================================
@@ -228,7 +234,7 @@ def build_l5(plots, area_rain, recent, today):
     return out
 
 
-def build_snapshot(cell, climate, recent, l5, areas, irradiance, units, sources, generated_at):
+def build_snapshot(cell, climate, recent, l5, areas, sun, units, sources, generated_at, irradiance_check=None):
     return {
         "schema": SCHEMA_VERSION,
         "generated_at": generated_at,
@@ -238,8 +244,9 @@ def build_snapshot(cell, climate, recent, l5, areas, irradiance, units, sources,
         "weatherkit_rain": areas,
         "recent_rain": recent,
         "irradiance": {"param": SUN, "unit": units.get(SUN),
-                       "days": {d.isoformat(): v for d, v in sorted(irradiance.items()) if v is not None}},
+                       "days": {d.isoformat(): v for d, v in sorted(sun.items()) if v is not None}},
         "nasa_power_sources": sources,
+        "irradiance_check": irradiance_check,  # optional, log-only (L9)
     }
 
 
@@ -260,6 +267,16 @@ def load_climate(path, today):
     climate = json.loads(path.read_text())
     age = (today - date.fromisoformat(climate["computed_on"])).days
     return climate if age <= CLIMATE_MAX_AGE_DAYS else None
+
+
+def check_cell_irradiance(values, cell):
+    """The log-only irradiance check for one cell, or None if it fails: it must never cost the cell its rain data."""
+    try:
+        # Elevation is left at 0 m: the FAO-56 term moves the bound by under 1% below 500 m
+        return irradiance.check_irradiance(values.get(SUN), values.get(SUN_CLEAR), cell["lat"])
+    except Exception:
+        log.warning("%s: irradiance check failed; written as null", cell["id"], exc_info=True)
+        return None
 
 
 def fetch_area_rain(weatherkit, area, today):
@@ -294,7 +311,9 @@ def run(plots, out, today, *, session, weatherkit=None, refresh_climate=False, a
                 log.info("%s: climate table rebuilt", cell["id"])
 
             start = (today - timedelta(days=45)).replace(day=1)  # the whole of last month, so its check is fair
-            values, units, sources = fetch(cell["lat"], cell["lon"], start, today, (RAIN, SUN), session)
+            qa_start = min(start, today - timedelta(days=QA_LOOKBACK_DAYS))  # one request, reaching back for CLRSKY
+            fetched, units, sources = fetch(cell["lat"], cell["lon"], qa_start, today, (RAIN, SUN, SUN_CLEAR), session)
+            values = {p: {d: v for d, v in series.items() if d >= start} for p, series in fetched.items()}  # as before
             present = [d for d, v in values[RAIN].items() if v is not None]
             wk_rain = None
             if weatherkit and present:
@@ -315,11 +334,14 @@ def run(plots, out, today, *, session, weatherkit=None, refresh_climate=False, a
                                          "rain_mm": {d.isoformat(): v for d, v in sorted(area_rain[area["id"]].items())}}
             l5 = build_l5([{"plot_id": p, "area": plot_area[p]["id"]} for p in cell["plots"]], area_rain, recent, today)
 
-            snapshot = build_snapshot(cell, climate, recent, l5, areas, values.get(SUN, {}), units, sources, generated_at)
+            snapshot = build_snapshot(cell, climate, recent, l5, areas, values.get(SUN, {}), units, sources, generated_at,
+                                      irradiance_check=check_cell_irradiance(fetched, cell))
             write_json(out / "cells" / cell["id"] / "latest.json", snapshot)
-            log.info("%s: %d plot(s), NASA rain to %s, suspect %s; P30 %s", cell["id"], len(cell["plots"]),
-                     recent["last_day"], recent["suspect_months"] or "none",
-                     ", ".join(f"{p} {r['p30_mm']} ({r['p30_source']}, {r['p30_quality']})" for p, r in l5.items()))
+            check = snapshot["irradiance_check"]
+            log.info("%s: %d plot(s), NASA rain to %s, suspect %s; P30 %s; irradiance flags %s", cell["id"],
+                     len(cell["plots"]), recent["last_day"], recent["suspect_months"] or "none",
+                     ", ".join(f"{p} {r['p30_mm']} ({r['p30_source']}, {r['p30_quality']})" for p, r in l5.items()),
+                     "n/a" if check is None else check["days_flagged"])
         except Exception:
             failed += 1
             log.exception("%s: failed", cell["id"])
