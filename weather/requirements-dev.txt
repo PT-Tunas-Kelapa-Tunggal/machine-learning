@@ -1,0 +1,2 @@
+# Tests only: reference values for solar.py. Never needed by the job or the app.
+pvlib

@@ -6,5 +6,6 @@ dependencies:
   - pip
   - pip:
       - -r requirements.txt
+      - -r requirements-dev.txt
       - jupyterlab
       - ipykernel
