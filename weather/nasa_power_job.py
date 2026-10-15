@@ -167,7 +167,7 @@ def fetch_nasa_power(lat, lon, start, end, params, session, retries=3):
                       for day, v in series.items()}
               for param, series in payload["properties"]["parameter"].items()}
     units = {k: v["units"] for k, v in payload["parameters"].items()}
-    if units.get(RAIN) != "mm/day":
+    if RAIN in params and units.get(RAIN) != "mm/day":  # the cloud fallback asks for sunlight alone
         raise ValueError(f"unexpected rain unit from NASA POWER: {units.get(RAIN)}")
     return values, units, payload["header"].get("sources", [])
 

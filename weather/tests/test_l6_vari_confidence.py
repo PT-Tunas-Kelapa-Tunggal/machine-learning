@@ -198,6 +198,20 @@ class FlightWeather(unittest.TestCase):
         self.assertEqual((cloud["source"], cloud["class"], cloud["clearness"]), ("nasa-power", "broken", 0.5))
         self.assertEqual(rain["source"], None)
 
+    def test_the_real_nasa_power_fetch_gives_cloud(self):
+        # nasa() above skips fetch_nasa_power's own checks; a sunlight-only reply carries no rain unit
+        day = date(2023, 6, 1)
+        cell = job.grid_cell(PLOT["lat"], PLOT["lon"])
+        clear = conf.solar.clear_sky_fao56(conf.solar.extraterrestrial_daily(cell["lat"], conf.solar.day_of_year(day)))
+        payload = {"header": {"fill_value": -999.0, "sources": ["MERRA2"]},
+                   "parameters": {job.SUN: {"units": "MJ/m^2/day"}},
+                   "properties": {"parameter": {job.SUN: {f"{day:%Y%m%d}": 0.5 * clear}}}}
+        session = mock.Mock(get=mock.Mock(return_value=mock.Mock(status_code=200, json=lambda: payload)))
+        with self.assertNoLogs("l6_vari_confidence", level="WARNING"):
+            cloud, _ = conf.flight_conditions(PLOT["lat"], PLOT["lon"], self.START, self.END, weatherkit=None,
+                                              nasa_fetch=job.fetch_nasa_power, session=session)
+        self.assertEqual((cloud["source"], cloud["class"], cloud["clearness"]), ("nasa-power", "broken", 0.5))
+
     def test_nothing_reachable_leaves_everything_unknown(self):
         with self.assertLogs("l6_vari_confidence", level="WARNING"):
             cloud, rain = conf.flight_conditions(PLOT["lat"], PLOT["lon"], self.START, self.END, weatherkit=None,

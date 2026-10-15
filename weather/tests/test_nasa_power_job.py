@@ -145,6 +145,31 @@ class FullRun(unittest.TestCase):
             self.assertTrue((Path(out) / "cells/n1.000_e104.3750/latest.json").is_file())
 
 
+def power_session(units, day, value):
+    """A fake requests session: one day of NASA POWER for each {param: unit}, all at the same value."""
+    payload = {"header": {"fill_value": -999.0, "sources": ["MERRA2"]},
+               "parameters": {p: {"units": u} for p, u in units.items()},
+               "properties": {"parameter": {p: {f"{day:%Y%m%d}": value} for p in units}}}
+    return mock.Mock(get=mock.Mock(return_value=mock.Mock(status_code=200, json=lambda: payload)))
+
+
+class FetchNasaPowerUnits(unittest.TestCase):
+    """The rain unit is checked only when rain was asked for."""
+
+    DAY = date(2023, 6, 1)
+
+    def test_sunlight_alone_needs_no_rain_unit(self):  # the VARI confidence's cloud fallback asks for this
+        session = power_session({job.SUN: "MJ/m^2/day"}, self.DAY, 18.5)
+        values, units, _ = job.fetch_nasa_power(1.0, 104.375, self.DAY, self.DAY, (job.SUN,), session)
+        self.assertEqual(values[job.SUN][self.DAY], 18.5)
+        self.assertEqual(units, {job.SUN: "MJ/m^2/day"})
+
+    def test_a_wrong_rain_unit_still_fails(self):
+        session = power_session({job.RAIN: "mm/hr"}, self.DAY, 3.0)
+        with self.assertRaisesRegex(ValueError, "unexpected rain unit"):
+            job.fetch_nasa_power(1.0, 104.375, self.DAY, self.DAY, (job.RAIN,), session)
+
+
 class FakeWeatherKit:
     """Returns the same rate every day; counts history requests per area."""
 
