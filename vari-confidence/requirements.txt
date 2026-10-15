@@ -1,0 +1,28 @@
+# vari_confidence.ipynb: segmentation → VARI → VARI confidence.
+# Python 3.12 on macOS (Core ML prediction runs on macOS only):
+#   conda create -n vari-confidence python=3.12 && conda activate vari-confidence
+#   pip install -r requirements.txt
+#
+# WeatherKit keys and the plot's location come from a .env (git-ignored) next to the notebook or in ../weather/:
+#   WK_TEAM_ID, WK_KEY_ID, WK_SERVICE_ID, WK_KEY_PATH (the .p8 key, kept outside the repo), LAT, LON
+# Without the keys the notebook still runs on NASA POWER alone, and the confidence is marked not final.
+
+# Segmentation, tree detection and VARI (the teammates' process)
+coremltools
+opencv-python
+numpy
+pillow
+matplotlib
+
+# VARI confidence: WeatherKit (signed token) and NASA POWER
+requests
+pyjwt
+cryptography
+python-dotenv
+
+# Tables
+pandas
+
+# Notebook
+jupyterlab
+ipykernel

@@ -1,0 +1,10 @@
+.DS_Store
+.ipynb_checkpoints/
+__pycache__/
+
+# Secrets: WeatherKit keys and the plot's coordinates
+.env
+*.p8
+
+# VARI confidence notebook: generated images, JSON and CSV
+vari-confidence/outputs/
