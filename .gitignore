@@ -6,5 +6,12 @@ __pycache__/
 .env
 *.p8
 
+# Weather experiments: raw API responses
+weather/data/raw/
+
+# NASA POWER job: real plot locations and generated output
+weather/plots.json
+weather/data/job/
+
 # VARI confidence notebook: generated images, JSON and CSV
 vari-confidence/outputs/

@@ -1,0 +1,287 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "Krops weather per-plot file, schema 3",
+ "description": "plots/<plot_key>/latest.json: only what the phone's L5 and L8 rules read. Field by field: weather/SCHEMA3.md.",
+ "type": "object",
+ "required": [
+  "schema",
+  "generated_at",
+  "l5",
+  "stage_a",
+  "attribution"
+ ],
+ "additionalProperties": false,
+ "properties": {
+  "schema": {
+   "const": 3
+  },
+  "generated_at": {
+   "type": "string",
+   "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+  },
+  "l5": {
+   "$ref": "#/$defs/l5"
+  },
+  "stage_a": {
+   "$ref": "#/$defs/stage_a"
+  },
+  "attribution": {
+   "type": "array",
+   "minItems": 1,
+   "items": {
+    "$ref": "#/$defs/attribution"
+   }
+  }
+ },
+ "if": {
+  "properties": {
+   "l5": {
+    "properties": {
+     "p30_source": {
+      "const": "weatherkit-history"
+     }
+    }
+   }
+  }
+ },
+ "then": {
+  "properties": {
+   "attribution": {
+    "contains": {
+     "properties": {
+      "source": {
+       "const": "apple-weather"
+      }
+     }
+    }
+   }
+  }
+ },
+ "$defs": {
+  "date": {
+   "type": "string",
+   "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+  },
+  "l5": {
+   "type": "object",
+   "required": [
+    "p30_mm",
+    "p30_start_date",
+    "p30_end_date",
+    "p30_source",
+    "p30_quality",
+    "water_stress",
+    "p30_missing_days"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "p30_mm": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0
+    },
+    "p30_start_date": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/date"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "p30_end_date": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/date"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "p30_source": {
+     "enum": [
+      "weatherkit-history",
+      "nasa-power",
+      null
+     ]
+    },
+    "p30_quality": {
+     "enum": [
+      "ok",
+      "fallback",
+      "none"
+     ]
+    },
+    "water_stress": {
+     "type": [
+      "boolean",
+      "null"
+     ]
+    },
+    "p30_missing_days": {
+     "type": "object",
+     "required": [
+      "weatherkit-history",
+      "nasa-power"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "weatherkit-history": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 30
+      },
+      "nasa-power": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 30
+      }
+     }
+    }
+   },
+   "if": {
+    "properties": {
+     "p30_quality": {
+      "const": "none"
+     }
+    }
+   },
+   "then": {
+    "properties": {
+     "p30_mm": {
+      "type": "null"
+     },
+     "p30_start_date": {
+      "type": "null"
+     },
+     "p30_end_date": {
+      "type": "null"
+     },
+     "p30_source": {
+      "type": "null"
+     },
+     "water_stress": {
+      "type": "null"
+     }
+    }
+   },
+   "else": {
+    "properties": {
+     "p30_mm": {
+      "type": "number"
+     },
+     "p30_start_date": {
+      "$ref": "#/$defs/date"
+     },
+     "p30_end_date": {
+      "$ref": "#/$defs/date"
+     },
+     "p30_source": {
+      "type": "string"
+     },
+     "water_stress": {
+      "type": "boolean"
+     }
+    }
+   }
+  },
+  "stage_a": {
+   "type": "object",
+   "required": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "11",
+    "12"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "1": {
+     "$ref": "#/$defs/month"
+    },
+    "2": {
+     "$ref": "#/$defs/month"
+    },
+    "3": {
+     "$ref": "#/$defs/month"
+    },
+    "4": {
+     "$ref": "#/$defs/month"
+    },
+    "5": {
+     "$ref": "#/$defs/month"
+    },
+    "6": {
+     "$ref": "#/$defs/month"
+    },
+    "7": {
+     "$ref": "#/$defs/month"
+    },
+    "8": {
+     "$ref": "#/$defs/month"
+    },
+    "9": {
+     "$ref": "#/$defs/month"
+    },
+    "10": {
+     "$ref": "#/$defs/month"
+    },
+    "11": {
+     "$ref": "#/$defs/month"
+    },
+    "12": {
+     "$ref": "#/$defs/month"
+    }
+   }
+  },
+  "month": {
+   "type": "object",
+   "required": [
+    "avg_mm"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "avg_mm": {
+     "type": "number",
+     "minimum": 0
+    }
+   }
+  },
+  "attribution": {
+   "type": "object",
+   "required": [
+    "source",
+    "text",
+    "url"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "source": {
+     "enum": [
+      "apple-weather",
+      "nasa-power"
+     ]
+    },
+    "text": {
+     "type": "string",
+     "minLength": 1
+    },
+    "url": {
+     "type": "string",
+     "pattern": "^https://"
+    }
+   }
+  }
+ }
+}

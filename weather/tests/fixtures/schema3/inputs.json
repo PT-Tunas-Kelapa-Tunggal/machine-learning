@@ -1,0 +1,109 @@
+{
+ "about": "Made-up inputs the schema-3 fixtures are built from (tests check the job still builds exactly these).",
+ "generated_at": "2026-10-14T06:15:00Z",
+ "climate": {
+  "stage_a": {
+   "1": {
+    "avg_mm": 210.0,
+    "in_band_share": 0.5,
+    "gate": "open"
+   },
+   "2": {
+    "avg_mm": 110.0,
+    "in_band_share": 0.5,
+    "gate": "open"
+   },
+   "3": {
+    "avg_mm": 170.0,
+    "in_band_share": 0.5,
+    "gate": "open"
+   },
+   "4": {
+    "avg_mm": 205.0,
+    "in_band_share": 0.5,
+    "gate": "open"
+   },
+   "5": {
+    "avg_mm": 205.0,
+    "in_band_share": 0.5,
+    "gate": "open"
+   },
+   "6": {
+    "avg_mm": 175.0,
+    "in_band_share": 0.5,
+    "gate": "open"
+   },
+   "7": {
+    "avg_mm": 175.0,
+    "in_band_share": 0.5,
+    "gate": "open"
+   },
+   "8": {
+    "avg_mm": 170.0,
+    "in_band_share": 0.5,
+    "gate": "open"
+   },
+   "9": {
+    "avg_mm": 165.0,
+    "in_band_share": 0.5,
+    "gate": "open"
+   },
+   "10": {
+    "avg_mm": 210.0,
+    "in_band_share": 0.5,
+    "gate": "open"
+   },
+   "11": {
+    "avg_mm": 300.0,
+    "in_band_share": 0.5,
+    "gate": "open"
+   },
+   "12": {
+    "avg_mm": 320.0,
+    "in_band_share": 0.5,
+    "gate": "open"
+   }
+  }
+ },
+ "records": {
+  "normal": {
+   "p30_mm": 110.8,
+   "p30_start_date": "2026-09-14",
+   "p30_end_date": "2026-10-13",
+   "p30_source": "weatherkit-history",
+   "water_stress": false,
+   "p30_quality": "ok",
+   "p30_missing_days": {
+    "weatherkit-history": 0,
+    "nasa-power": 0
+   },
+   "weatherkit_area": "n9.900_e99.9000"
+  },
+  "weatherkit_fallback": {
+   "p30_mm": 52.4,
+   "p30_start_date": "2026-09-12",
+   "p30_end_date": "2026-10-11",
+   "p30_source": "nasa-power",
+   "water_stress": true,
+   "p30_quality": "fallback",
+   "p30_missing_days": {
+    "weatherkit-history": 1,
+    "nasa-power": 0
+   },
+   "weatherkit_area": "n9.900_e99.9000"
+  },
+  "null_p30": {
+   "p30_mm": null,
+   "p30_start_date": null,
+   "p30_end_date": null,
+   "p30_source": null,
+   "water_stress": null,
+   "p30_quality": "none",
+   "p30_missing_days": {
+    "weatherkit-history": 30,
+    "nasa-power": 2
+   },
+   "weatherkit_area": "n9.900_e99.9000"
+  }
+ }
+}
