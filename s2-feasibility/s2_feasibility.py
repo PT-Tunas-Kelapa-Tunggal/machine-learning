@@ -161,6 +161,25 @@ def uji1(plot, items, first, last):
 
 
 # ============================================================
+# UJI 2
+# ============================================================
+
+NOT_RUN_PROXY = ("data/private/plots.geojson is missing: the brief runs Uji 2–3 on real plots only, so this "
+                 "run checked them on synthetic tests alone")
+
+
+def uji2(plots, placed):
+    out = {}
+    for plot in plots:
+        ctx = placed[plot["plot_id"]]
+        if ctx is None:
+            out[plot["plot_id"]] = {"error": "no tile holds the whole plot"}
+            continue
+        out[plot["plot_id"]] = rules.uji2_row(ctx["geometry"].area, ctx["raw"].sum(), ctx["interior"].sum())
+    return out
+
+
+# ============================================================
 # OUTPUT
 # ============================================================
 
@@ -192,15 +211,24 @@ def main():
     items, catalogue_log = catalogue(plots, first, last)
     _, offsets = offset_report(items)
 
-    results, months_csv, moy_csv = {}, [], []
+    results, months_csv, moy_csv, placed = {}, [], [], {}
     for plot in plots:
-        result, _ = uji1(plot, items, first, last)
+        result, ctx = uji1(plot, items, first, last)
         results[plot["plot_id"]] = result
+        placed[plot["plot_id"]] = ctx
         months_csv += [{"plot_id": plot["plot_id"]} | r for r in result.get("months", [])]
         moy_csv += [{"plot_id": plot["plot_id"]} | r for r in result.get("month_of_year", [])]
     write_json("uji1.json", results)
     write_csv("uji1_months.csv", months_csv)
     write_csv("uji1_month_of_year.csv", moy_csv)
+
+    proxy = plots[0]["proxy"]
+    if proxy:
+        write_json("uji2.json", {"not_run": NOT_RUN_PROXY, "method": rules.UJI2_METHOD})
+    else:
+        u2 = uji2(plots, placed)
+        write_json("uji2.json", {"method": rules.UJI2_METHOD, "plots": u2})
+        write_csv("uji2.csv", [{"plot_id": k} | v for k, v in u2.items()])
     write_json("run.json", {
         "as_of": fetch.TODAY.isoformat(),
         "as_of_run": bool(fetch.AS_OF_DATE),
@@ -214,7 +242,7 @@ def main():
         "offset": offsets,
     })
     scan_outputs()
-    print(f"Uji 1 written to {OUT_DIR.relative_to(ROOT)}/ for {len(plots)} plot(s)")
+    print(f"Uji 1{'' if proxy else '–2'} written to {OUT_DIR.relative_to(ROOT)}/ for {len(plots)} plot(s)")
 
 
 if __name__ == "__main__":

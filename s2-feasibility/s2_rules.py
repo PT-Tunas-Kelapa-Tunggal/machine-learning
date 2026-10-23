@@ -12,6 +12,7 @@ Conventions
 """
 from __future__ import annotations
 
+import math
 import re
 from collections import Counter
 
@@ -217,6 +218,35 @@ def longest_gap(rows):
             best = {"months": len(run), "first": run[0], "last": run[-1]}
         run = []
     return best
+
+
+# ============================================================
+# UJI 2: CLEAN PIXEL COUNT
+# ============================================================
+
+PIXEL_M = 20
+UJI2_METHOD = (f"20 m pixels counted only when the whole {PIXEL_M} m square lies inside the polygon (shapely "
+               f"contains on each pixel box; not all_touched, not pixel centres). pixels_clean uses the plot "
+               f"buffered inward by INNER_BUFFER_M; pixels_raw the plot as drawn.")
+
+
+def compact_clean_pixels(area_m2, buffer_m=INNER_BUFFER_M):
+    """Pixels a round plot of the same area would keep after the inward buffer: the shape-free expectation."""
+    r = math.sqrt(area_m2 / math.pi) - buffer_m
+    return 0 if r <= 0 else int(math.pi * r * r // (PIXEL_M * PIXEL_M))
+
+
+def uji2_row(area_m2, pixels_raw, pixels_clean, minimum=MIN_CLEAN_PIXELS, buffer_m=INNER_BUFFER_M):
+    """area_ha, pixels_raw, pixels_clean, pass; fails_for_shape when a round plot of the same area would pass."""
+    pixels_raw, pixels_clean = int(pixels_raw), int(pixels_clean)
+    passed = pixels_clean >= minimum
+    return {
+        "area_ha": round(float(area_m2) / 10_000, 2),
+        "pixels_raw": pixels_raw,
+        "pixels_clean": pixels_clean,
+        "pass": passed,
+        "fails_for_shape": not passed and compact_clean_pixels(area_m2, buffer_m) >= minimum,
+    }
 
 
 # ============================================================
