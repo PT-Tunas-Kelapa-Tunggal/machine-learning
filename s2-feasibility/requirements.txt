@@ -1,0 +1,7 @@
+# Sentinel-2 feasibility tests. rasterio needs GDAL: install from conda-forge (environment.yml), not pip.
+numpy
+rasterio
+pystac-client
+shapely>=2
+pyproj
+python-dotenv

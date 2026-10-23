@@ -1,0 +1,11 @@
+name: krops-s2
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - numpy
+  - rasterio
+  - pystac-client
+  - shapely>=2
+  - pyproj
+  - python-dotenv
