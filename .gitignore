@@ -8,3 +8,6 @@ __pycache__/
 
 # VARI confidence notebook: generated images, JSON and CSV
 vari-confidence/outputs/
+
+# Integration notebook: generated images, crops, CSV and JSON
+integration/oil_palm_*
