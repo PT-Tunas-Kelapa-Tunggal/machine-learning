@@ -1,6 +1,6 @@
 """REPORT.md for the Sentinel-2 feasibility run, built only from the JSON outputs next to it.
 
-    cd s2-feasibility && python s2_report.py    # rebuild the report from outputs/s2_feasibility/*.json
+    cd s2-feasibility && python s2_report.py    # rebuild the report from s2-feasibility/outputs/*.json
 
 The report repeats numbers from the JSON outputs; it adds no coordinates and decides nothing.
 """
@@ -11,8 +11,7 @@ from pathlib import Path
 
 import s2_rules as rules
 
-ROOT = Path(__file__).resolve().parent.parent
-OUT_DIR = ROOT / "outputs" / "s2_feasibility"
+OUT_DIR = Path(__file__).resolve().parent / "outputs"
 MONTH_NAMES = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
 
 
@@ -123,7 +122,7 @@ def build(out_dir=OUT_DIR):
         f"- Plots: {run['plots']} from {run['plots_source']}.",
     ]
     if proxy:
-        lines.append("- **Proxy only.** data/private/plots.geojson is missing (plot_id, year_planted or age_years, "
+        lines.append("- **Proxy only.** s2-feasibility/data/private/plots.geojson is missing (plot_id, year_planted or age_years, "
                      "source per feature), so Uji 1 ran on a 100 m buffer around the .env point and Uji 2–3 were "
                      "checked on synthetic tests only.")
     lines += [
@@ -161,7 +160,7 @@ def build(out_dir=OUT_DIR):
         "'not vegetated' counts as clear today.",
     ]
     if proxy:
-        lines.append("9. Plot boundaries: who supplies data/private/plots.geojson, and from which source.")
+        lines.append("9. Plot boundaries: who supplies s2-feasibility/data/private/plots.geojson, and from which source.")
     text = "\n".join(lines) + "\n"
     (out_dir / "REPORT.md").write_text(text)
     return text
@@ -169,4 +168,4 @@ def build(out_dir=OUT_DIR):
 
 if __name__ == "__main__":
     build()
-    print(f"REPORT.md rebuilt in {OUT_DIR.relative_to(ROOT)}/")
+    print("REPORT.md rebuilt in s2-feasibility/outputs/")

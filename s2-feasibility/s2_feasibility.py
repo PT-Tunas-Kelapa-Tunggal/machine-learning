@@ -1,9 +1,10 @@
-"""Sentinel-2 plot-level baseline, feasibility tests Uji 1–3, written to outputs/s2_feasibility/ (repo root).
+"""Sentinel-2 plot-level baseline, feasibility tests Uji 1–3, written to s2-feasibility/outputs/.
 
     cd s2-feasibility && python s2_feasibility.py                         # fetches only what the cache lacks
     cd s2-feasibility && AS_OF_DATE=2026-10-23 python s2_feasibility.py   # cache only; never fetches
 
-Plots come from data/private/plots.geojson (repo root, gitignored): plot_id, year_planted or age_years, source.
+Plots come from s2-feasibility/data/private/plots.geojson (gitignored; tools/ge_to_plots.py makes it from a Google
+Earth export): plot_id, year_planted, age_years or age_uncertain, source.
 Without it, Uji 1 runs on one proxy plot (a 100 m buffer around the point in weather/.env), marked as a proxy,
 and Uji 2–3 are left to the synthetic tests.
 
@@ -32,8 +33,8 @@ import s2_rules as rules
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-PLOTS_PATH = ROOT / "data" / "private" / "plots.geojson"
-OUT_DIR = ROOT / "outputs" / "s2_feasibility"
+PLOTS_PATH = HERE / "data" / "private" / "plots.geojson"
+OUT_DIR = HERE / "outputs"
 for env in (HERE / ".env", ROOT / "weather" / ".env"):
     load_dotenv(env)
 LAT, LON = float(os.environ["LAT"]), float(os.environ["LON"])
@@ -172,7 +173,7 @@ def uji1(plot, items, first, last):
 # UJI 2
 # ============================================================
 
-NOT_RUN_PROXY = ("data/private/plots.geojson is missing: the brief runs Uji 2–3 on real plots only, so this "
+NOT_RUN_PROXY = ("s2-feasibility/data/private/plots.geojson is missing: the brief runs Uji 2–3 on real plots only, so this "
                  "run checked them on synthetic tests alone")
 
 
@@ -360,7 +361,7 @@ def main():
         "as_of_run": bool(fetch.AS_OF_DATE),
         "period": [rules.month_label(first), rules.month_label(last)],
         "plots": len(plots),
-        "plots_source": "proxy" if plots[0]["proxy"] else "data/private/plots.geojson",
+        "plots_source": "proxy" if plots[0]["proxy"] else "s2-feasibility/data/private/plots.geojson",
         "thresholds": {"CLEAR_SHARE_MIN": rules.CLEAR_SHARE_MIN, "INNER_BUFFER_M": rules.INNER_BUFFER_M,
                        "MIN_CLEAN_PIXELS": rules.MIN_CLEAN_PIXELS, "MIN_PIXELS_PER_STAT": rules.MIN_PIXELS_PER_STAT,
                        "OFFSET_DARK_SHARE_MAX": rules.OFFSET_DARK_SHARE_MAX, "DEDUP": rules.DEDUP},
@@ -369,7 +370,7 @@ def main():
     })
     report.build(OUT_DIR)
     scan_outputs()
-    print(f"Uji 1{'' if proxy else '–3'} and REPORT.md written to outputs/s2_feasibility/ for {len(plots)} plot(s)")
+    print(f"Uji 1{'' if proxy else '–3'} and REPORT.md written to s2-feasibility/outputs/ for {len(plots)} plot(s)")
 
 
 if __name__ == "__main__":

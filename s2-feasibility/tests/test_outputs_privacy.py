@@ -1,4 +1,4 @@
-"""The no-coordinates rule on the real outputs: every file in outputs/s2_feasibility/ is scanned.
+"""The no-coordinates rule on the real outputs: every file in s2-feasibility/outputs/ is scanned.
 
     cd s2-feasibility && python -m unittest discover -s tests -v
 
@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "s2-feasibility"))
 import s2_rules as rules  # noqa: E402
 
-OUT_DIR = ROOT / "outputs" / "s2_feasibility"
+OUT_DIR = ROOT / "s2-feasibility" / "outputs"
 
 
 def env_values():

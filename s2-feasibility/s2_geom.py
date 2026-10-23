@@ -31,22 +31,29 @@ def project(geom, src, dst):
 def load_plots(path, lat, lon):
     """Plots from the private GeoJSON (WGS84, RFC 7946), or one proxy plot around the .env point.
 
-    Each plot: plot_id, geometry (WGS84), year_planted, age_years, source, proxy.
+    Each plot: plot_id, geometry (WGS84), year_planted, age_years, age_uncertain, source, proxy. A plot marked
+    age_uncertain (tools/ge_to_plots.py) has no age, whatever else it carries.
     """
     if path.is_file():
         features = json.loads(path.read_text())["features"]
-        return [{
-            "plot_id": str(f["properties"]["plot_id"]),
-            "geometry": shape(f["geometry"]),
-            "year_planted": f["properties"].get("year_planted"),
-            "age_years": f["properties"].get("age_years"),
-            "source": f["properties"].get("source"),
-            "proxy": False,
-        } for f in features]
+        plots = []
+        for f in features:
+            p = f["properties"]
+            uncertain = bool(p.get("age_uncertain"))
+            plots.append({
+                "plot_id": str(p["plot_id"]),
+                "geometry": shape(f["geometry"]),
+                "year_planted": None if uncertain else p.get("year_planted"),
+                "age_years": None if uncertain else p.get("age_years"),
+                "age_uncertain": uncertain,
+                "source": p.get("source"),
+                "proxy": False,
+            })
+        return plots
     utm = utm_crs(lon, lat)
     centre = project(Point(lon, lat), WGS84, utm)
     circle = project(centre.buffer(rules.PROXY_BUFFER_M, quad_segs=64), utm, WGS84)
-    return [{"plot_id": PROXY_ID, "geometry": circle, "year_planted": None, "age_years": None,
+    return [{"plot_id": PROXY_ID, "geometry": circle, "year_planted": None, "age_years": None, "age_uncertain": False,
              "source": f"proxy: {rules.PROXY_BUFFER_M} m buffer around the .env point (no plots.geojson)",
              "proxy": True}]
 

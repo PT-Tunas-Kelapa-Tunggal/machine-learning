@@ -18,5 +18,7 @@ vari-confidence/outputs/
 
 # Sentinel-2 feasibility: private plot boundaries, cached STAC responses and windows, generated outputs
 data/private/
+s2-feasibility/data/private/
 s2-feasibility/data/cache/
+s2-feasibility/outputs/
 outputs/
