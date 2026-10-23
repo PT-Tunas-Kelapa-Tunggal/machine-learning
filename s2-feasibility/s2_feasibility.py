@@ -15,11 +15,13 @@ from __future__ import annotations
 import csv
 import json
 import os
-from collections import Counter
+import sys
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
 
+import numpy as np
 import shapely
 from dotenv import load_dotenv
 
@@ -35,6 +37,11 @@ for env in (HERE / ".env", ROOT / "weather" / ".env"):
     load_dotenv(env)
 LAT, LON = float(os.environ["LAT"]), float(os.environ["LON"])
 THREADS = 12
+
+WEATHER_DIR = ROOT / "weather"
+RAIN_AS_OF = date(2026, 10, 11)  # weather notebook 1's run: Uji 3 reads that day's saved rain, as notebook 03 does
+RAIN_END = date(2026, 10, 8)     # NASA POWER's last day of rain in that run
+WK_FROM = date(2021, 8, 1)       # WeatherKit history starts here
 
 
 # ============================================================
@@ -157,7 +164,7 @@ def uji1(plot, items, first, last):
         "scl_interior_pixels_by_class": rules.class_totals(s["counts"] for s in scenes),
     }
     return result, {"tile": tile, "geometry": g, "window": window, "transform": transform, "raw": raw,
-                    "interior": interior, "items": on_tile, "scenes": scenes}
+                    "interior": interior, "items": on_tile, "scenes": scenes, "scl": scl}
 
 
 # ============================================================
@@ -177,6 +184,111 @@ def uji2(plots, placed):
             continue
         out[plot["plot_id"]] = rules.uji2_row(ctx["geometry"].area, ctx["raw"].sum(), ctx["interior"].sum())
     return out
+
+
+# ============================================================
+# UJI 3
+# ============================================================
+
+def rain_sources():
+    """Daily rain per source, built as weather notebook 03 builds it: the same calls on the same saved responses.
+
+    P30 and water_stress then come from weather/l2_scan_rain.p30_at (krops_rules.choose_p30), imported, not copied.
+    """
+    sys.path.insert(0, str(WEATHER_DIR))
+    import pandas as pd
+    import krops_weather as kw
+
+    history, _, _ = kw.fetch_nasa_power(date(1991, 1, 1), date(2025, 12, 31), params=("PRECTOTCORR",))
+    this_year, _, _ = kw.fetch_nasa_power(date(2026, 1, 1), RAIN_AS_OF, forever=True)
+    nasa_all = pd.concat([history["PRECTOTCORR"], this_year["PRECTOTCORR"]]).dropna()
+    nasa_all = nasa_all[~nasa_all.index.duplicated(keep="last")].sort_index()
+    wk_rain = kw.fetch_weatherkit_history(WK_FROM, RAIN_END, forever=True)["rain_mm"].dropna()
+    check = kw.suspect_months(nasa_all[nasa_all.index >= WK_FROM], kw.monthly_normals(nasa_all), wk_rain)
+    nasa_ok = kw.drop_months(nasa_all, check.index[check["suspect"]])
+    return {"weatherkit-history": wk_rain.to_dict(), "nasa-power": nasa_ok.dropna().to_dict()}
+
+
+def uji3_plot(ctx, decisions, sources):
+    """Monthly NDRE and CIre (median, IQR) over the clear interior pixels, each month annotated with L5 P30."""
+    sys.path.insert(0, str(WEATHER_DIR))
+    import l2_scan_rain as l2
+
+    items = {i["id"]: i for i in ctx["items"]}
+    candidates = [s for s in ctx["scenes"] if s["counts"][4] + s["counts"][5] > 0]
+    usable = [s for s in candidates if decisions[s["id"]] != "unresolved"]
+    bands = {b: read_all([items[s["id"]] for s in usable], b, ctx["window"]) for b in ("B05", "B07", "B8A")}
+    pixels = {"ndre": defaultdict(list), "cire": defaultdict(list)}
+    dates, failed = defaultdict(set), Counter()
+    for s in usable:
+        arrays = [bands[b][s["id"]] for b in ("B05", "B07", "B8A")]
+        if any(isinstance(a, str) for a in arrays):
+            failed[next(a for a in arrays if isinstance(a, str))] += 1
+            continue
+        clear = ctx["interior"] & np.isin(ctx["scl"][s["id"]], rules.CLEAR_CLASSES)
+        b5, b7, b8a = (rules.harmonize(a, decisions[s["id"]] == "offset")[clear] for a in arrays)
+        month = rules.month_of(s["date"])
+        pixels["ndre"][month].append(rules.ndre(b8a, b5))
+        pixels["cire"][month].append(rules.cire(b7, b5))
+        dates[month].add(s["date"])
+    stats = {name: rules.month_stats(by_month) for name, by_month in pixels.items()}
+    rows = []
+    for month in sorted(stats["ndre"]):
+        p30 = [l2.p30_at(sources, d) for d in sorted(dates[month])]
+        nd, ci = stats["ndre"][month], stats["cire"].get(month) or {}
+        known = [r["p30_mm"] for r in p30 if r["p30_mm"] is not None]
+        rows.append({
+            "month": rules.month_label(month), "scenes": len(dates[month]), "pixels": nd["n"],
+            "ndre_median": nd["median"], "ndre_q1": nd["q1"], "ndre_q3": nd["q3"], "ndre_iqr": nd["iqr"],
+            "cire_median": ci.get("median"), "cire_q1": ci.get("q1"), "cire_q3": ci.get("q3"),
+            "cire_iqr": ci.get("iqr"),
+            "p30_mm_min": min(known) if known else None, "p30_mm_max": max(known) if known else None,
+            "p30_sources": "+".join(sorted({r["p30_source"] or "none" for r in p30})),
+            "water_stress": rules.month_water_stress([r["water_stress"] for r in p30]),
+        })
+    return {
+        "scenes_with_clear_interior": len(candidates),
+        "scenes_skipped_offset_unresolved": len(candidates) - len(usable),
+        "scenes_failed": dict(failed),
+        "months_with_stats": len(rows),
+        "months": rows,
+    }
+
+
+def uji3_summary(plots, per_plot, ref_year):
+    """a) Spearman of age vs annual median NDRE, per year; b) signal vs noise per age class, ± water_stress months."""
+    by_id = {p["plot_id"]: p for p in plots}
+    years = sorted({int(r["month"][:4]) for v in per_plot.values() for r in v["months"]})
+    age_signal = []
+    for year in years:
+        pairs = []
+        for pid, v in per_plot.items():
+            medians = [r["ndre_median"] for r in v["months"] if r["month"].startswith(f"{year}-")]
+            age = rules.plot_age(by_id[pid], year, ref_year)
+            if medians and age is not None:
+                pairs.append((age, float(np.median(medians))))
+        rho = rules.spearman([a for a, _ in pairs], [m for _, m in pairs])
+        age_signal.append({"year": year, "plots": len(pairs), "spearman_rho": rho,
+                           "note": "" if rho is not None else "not computed: fewer than 3 plots or no spread"})
+    classes = [name for _, _, name in rules.AGE_CLASSES]
+    noise = []
+    for name in classes:
+        for index in ("ndre", "cire"):
+            for drop_stress in (False, True):
+                groups = defaultdict(list)
+                for pid, v in per_plot.items():
+                    for r in v["months"]:
+                        if rules.age_class(rules.plot_age(by_id[pid], int(r["month"][:4]), ref_year)) != name:
+                            continue
+                        if (drop_stress and r["water_stress"] is True) or r[f"{index}_median"] is None:
+                            continue
+                        groups[pid].append(r[f"{index}_median"])
+                noise.append({"age_class": name, "index": index.upper() if index == "ndre" else "CIre",
+                              "water_stress_months": "excluded" if drop_stress else "included"}
+                             | rules.signal_vs_noise(groups))
+    return {"age_signal": age_signal, "signal_vs_noise": noise,
+            "plots_without_age": sorted(pid for pid in per_plot
+                                        if rules.plot_age(by_id[pid], ref_year, ref_year) is None)}
 
 
 # ============================================================
@@ -209,7 +321,7 @@ def main():
     plots = geom.load_plots(PLOTS_PATH, LAT, LON)
     first, last = rules.FIRST_MONTH, rules.latest_complete_month(fetch.TODAY)
     items, catalogue_log = catalogue(plots, first, last)
-    _, offsets = offset_report(items)
+    decisions, offsets = offset_report(items)
 
     results, months_csv, moy_csv, placed = {}, [], [], {}
     for plot in plots:
@@ -229,6 +341,19 @@ def main():
         u2 = uji2(plots, placed)
         write_json("uji2.json", {"method": rules.UJI2_METHOD, "plots": u2})
         write_csv("uji2.csv", [{"plot_id": k} | v for k, v in u2.items()])
+
+    if proxy:
+        write_json("uji3.json", {"not_run": NOT_RUN_PROXY})
+    else:
+        sources = rain_sources()
+        per_plot = {p["plot_id"]: uji3_plot(placed[p["plot_id"]], decisions, sources)
+                    for p in plots if placed[p["plot_id"]] is not None}
+        summary = uji3_summary(plots, per_plot, fetch.TODAY.year)
+        write_json("uji3.json", {"month_pooling": rules.MONTH_POOLING, "month_water_stress": rules.MONTH_WATER_STRESS,
+                                 "plots": per_plot} | summary)
+        write_csv("uji3_plot_months.csv", [{"plot_id": pid} | r for pid, v in per_plot.items() for r in v["months"]])
+        write_csv("uji3_age_signal.csv", summary["age_signal"])
+        write_csv("uji3_signal_vs_noise.csv", summary["signal_vs_noise"])
     write_json("run.json", {
         "as_of": fetch.TODAY.isoformat(),
         "as_of_run": bool(fetch.AS_OF_DATE),
@@ -242,7 +367,7 @@ def main():
         "offset": offsets,
     })
     scan_outputs()
-    print(f"Uji 1{'' if proxy else '–2'} written to {OUT_DIR.relative_to(ROOT)}/ for {len(plots)} plot(s)")
+    print(f"Uji 1{'' if proxy else '–3'} written to {OUT_DIR.relative_to(ROOT)}/ for {len(plots)} plot(s)")
 
 
 if __name__ == "__main__":

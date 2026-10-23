@@ -5,3 +5,10 @@ pystac-client
 shapely>=2
 pyproj
 python-dotenv
+
+# Uji 3 imports weather/ for P30 and water_stress; krops_weather needs these
+pandas
+requests
+pyjwt
+cryptography
+matplotlib

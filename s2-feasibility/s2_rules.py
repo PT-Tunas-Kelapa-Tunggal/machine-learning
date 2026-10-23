@@ -38,6 +38,8 @@ AGE_CLASSES = (            # GUESS – PENDING TEAM DECISION: (first age, last a
 OFFSET_DARK_SHARE_MAX = 0.05     # GUESS – PENDING TEAM DECISION: metadata says the +1000 DN offset is in the pixels;
                                  # believe it only when at most this share of the tile's valid pixels is under 1000 DN
 DARK_EVIDENCE_MIN_PIXELS = 500   # GUESS – PENDING TEAM DECISION: fewer valid pixels in the tile overview → no pixel evidence
+MONTH_POOLING = "every clear interior pixel of every scene in the month"  # GUESS – PENDING TEAM DECISION
+MONTH_WATER_STRESS = "any scene"  # GUESS – PENDING TEAM DECISION: a plot-month is water_stress when any of its scenes was
 DEDUP = "highest processing baseline per acquisition"  # GUESS – PENDING TEAM DECISION: ESA reprocessing left
                                                        # two copies of many 2019–2022 acquisitions in the catalogue
 
@@ -246,6 +248,117 @@ def uji2_row(area_m2, pixels_raw, pixels_clean, minimum=MIN_CLEAN_PIXELS, buffer
         "pixels_clean": pixels_clean,
         "pass": passed,
         "fails_for_shape": not passed and compact_clean_pixels(area_m2, buffer_m) >= minimum,
+    }
+
+
+# ============================================================
+# UJI 3: SIGNAL VS NOISE
+# ============================================================
+
+def ndre(b8a, b5):
+    """(B8A − B5) / (B8A + B5) on reflectance; NaN where the sum is 0 or a band has no data."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        out = (b8a - b5) / (b8a + b5)
+    return np.where(np.isfinite(out), out, np.nan)
+
+
+def cire(b7, b5):
+    """B7 / B5 − 1 on reflectance; NaN where B5 is 0 or a band has no data."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        out = b7 / b5 - 1
+    return np.where(np.isfinite(out), out, np.nan)
+
+
+def median_iqr(values):
+    """{"n", "median", "q1", "q3", "iqr"} over the finite values; None when there are none."""
+    v = np.asarray(values, dtype="float64")
+    v = v[np.isfinite(v)]
+    if v.size == 0:
+        return None
+    q1, med, q3 = (float(x) for x in np.percentile(v, [25, 50, 75]))
+    return {"n": int(v.size), "median": round(med, 4), "q1": round(q1, 4), "q3": round(q3, 4),
+            "iqr": round(q3 - q1, 4)}
+
+
+def month_stats(pixels_by_month, min_pixels=MIN_PIXELS_PER_STAT):
+    """{month: median_iqr} for each month with at least min_pixels finite values (pooled over its scenes)."""
+    out = {}
+    for month, chunks in sorted(pixels_by_month.items()):
+        v = np.concatenate([np.asarray(c, dtype="float64").ravel() for c in chunks]) if chunks else np.array([])
+        v = v[np.isfinite(v)]
+        if v.size >= min_pixels:
+            out[month] = median_iqr(v)
+    return out
+
+
+def month_water_stress(flags):
+    """MONTH_WATER_STRESS over the scenes' L5 water_stress: True if any is, None if any is unknown, else False."""
+    if any(f is True for f in flags):
+        return True
+    if not flags or any(f is None for f in flags):
+        return None
+    return False
+
+
+def plot_age(plot, year, ref_year):
+    """Whole years since planting during `year`; age_years is taken as of ref_year. None when neither is given."""
+    if plot.get("year_planted") is not None:
+        return year - int(plot["year_planted"])
+    if plot.get("age_years") is not None:
+        return int(plot["age_years"]) - (ref_year - year)
+    return None
+
+
+def age_class(age, classes=AGE_CLASSES):
+    if age is None:
+        return None
+    return next((name for lo, hi, name in classes if lo <= age <= hi), None)
+
+
+def _ranks(x):
+    order = np.argsort(x, kind="mergesort")
+    ranks = np.empty(len(x))
+    ranks[order] = np.arange(1, len(x) + 1)
+    for value in np.unique(x):  # ties share their mean rank
+        tie = x == value
+        ranks[tie] = ranks[tie].mean()
+    return ranks
+
+
+def spearman(x, y):
+    """Spearman's rho with tied ranks averaged; None for fewer than 3 pairs or a constant side."""
+    x, y = np.asarray(x, dtype="float64"), np.asarray(y, dtype="float64")
+    if x.size < 3 or np.ptp(x) == 0 or np.ptp(y) == 0:
+        return None
+    return round(float(np.corrcoef(_ranks(x), _ranks(y))[0, 1]), 4)
+
+
+def signal_vs_noise(groups, min_plots=3):
+    """Between-plot vs within-plot variation of monthly plot medians, within one age class.
+
+    `groups` is {plot_id: [monthly medians]}; plots with fewer than 2 months are left out. between = variance of
+    the plots' medians (of their monthly medians); within = mean over plots of the variance of their monthly
+    medians (both ddof=1); ratio = between / within. icc = one-way random-effects ICC(1) on the monthly
+    medians, unbalanced ANOVA form. Fewer than min_plots plots → nothing reported, and the record says why.
+    """
+    groups = {k: np.asarray(v, dtype="float64") for k, v in groups.items() if len(v) >= 2}
+    base = {"plots": len(groups), "months": int(sum(v.size for v in groups.values()))}
+    if len(groups) < min_plots:
+        return base | {"not_reported": f"fewer than {min_plots} plots with 2+ months"}
+    values = list(groups.values())
+    between = float(np.var([np.median(v) for v in values], ddof=1))
+    within = float(np.mean([np.var(v, ddof=1) for v in values]))
+    k, sizes = len(values), np.array([v.size for v in values])
+    n_total, grand = sizes.sum(), np.concatenate(values).mean()
+    msb = sum(v.size * (v.mean() - grand) ** 2 for v in values) / (k - 1)
+    msw = sum(((v - v.mean()) ** 2).sum() for v in values) / (n_total - k)
+    n0 = (n_total - (sizes ** 2).sum() / n_total) / (k - 1)
+    icc = (msb - msw) / (msb + (n0 - 1) * msw) if msb + (n0 - 1) * msw > 0 else None
+    return base | {
+        "between_plot_variance": round(between, 6),
+        "within_plot_variance": round(within, 6),
+        "ratio": round(between / within, 3) if within > 0 else None,
+        "icc": round(float(icc), 3) if icc is not None else None,
     }
 
 
