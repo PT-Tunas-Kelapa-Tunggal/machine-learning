@@ -174,6 +174,8 @@ def uji1(plot, items, first, last):
 # UJI 2
 # ============================================================
 
+ANOMALY_RULE = (f"NDRE monthly median more than ANOMALY_MAD_K = {rules.ANOMALY_MAD_K} (GUESS) × 1.4826 × MAD from the "
+                f"plot's median over all its months; the flag applies to NDRE and CIre")
 RAIN_LOCATION = ("each plot's centroid, on the weather job's grid: NASA POWER cell (checked as the job checks it) "
                  "and WeatherKit 0.1° area")
 NOT_RUN_PROXY = ("s2-feasibility/data/private/plots.geojson is missing: the brief runs Uji 2–3 on real plots only, so this "
@@ -235,6 +237,8 @@ def uji3_plot(ctx, decisions, sources):
             "p30_sources": "+".join(sorted({r["p30_source"] or "none" for r in p30})),
             "water_stress": rules.month_water_stress([r["water_stress"] for r in p30]),
         })
+    for row, flag in zip(rows, rules.anomaly_flags([r["ndre_median"] for r in rows])):
+        row["anomaly"] = flag
     return {
         "scenes_with_clear_interior": len(candidates),
         "scenes_skipped_offset_unresolved": len(candidates) - len(usable),
@@ -264,17 +268,20 @@ def uji3_summary(plots, per_plot, ref_year):
     for name in classes:
         for index in ("ndre", "cire"):
             for drop_stress in (False, True):
-                groups = defaultdict(list)
-                for pid, v in per_plot.items():
-                    for r in v["months"]:
-                        if rules.age_class(rules.plot_age(by_id[pid], int(r["month"][:4]), ref_year)) != name:
-                            continue
-                        if (drop_stress and r["water_stress"] is True) or r[f"{index}_median"] is None:
-                            continue
-                        groups[pid].append(r[f"{index}_median"])
-                noise.append({"age_class": name, "index": index.upper() if index == "ndre" else "CIre",
-                              "water_stress_months": "excluded" if drop_stress else "included"}
-                             | rules.signal_vs_noise(groups))
+                for drop_anomaly in (False, True):
+                    groups = defaultdict(list)
+                    for pid, v in per_plot.items():
+                        for r in v["months"]:
+                            if rules.age_class(rules.plot_age(by_id[pid], int(r["month"][:4]), ref_year)) != name:
+                                continue
+                            if (drop_stress and r["water_stress"] is True) or (drop_anomaly and r["anomaly"]) \
+                                    or r[f"{index}_median"] is None:
+                                continue
+                            groups[pid].append(r[f"{index}_median"])
+                    noise.append({"age_class": name, "index": index.upper() if index == "ndre" else "CIre",
+                                  "water_stress_months": "excluded" if drop_stress else "included",
+                                  "anomaly_months": "excluded" if drop_anomaly else "included"}
+                                 | rules.signal_vs_noise(groups))
     return {"age_signal": age_signal, "signal_vs_noise": noise,
             "plots_without_age": sorted(pid for pid in per_plot
                                         if rules.plot_age(by_id[pid], ref_year, ref_year) is None)}
@@ -353,6 +360,7 @@ def main():
                     for p in plots if placed[p["plot_id"]] is not None}
         summary = uji3_summary(plots, per_plot, fetch.TODAY.year)
         write_json("uji3.json", {"month_pooling": rules.MONTH_POOLING, "month_water_stress": rules.MONTH_WATER_STRESS,
+                                 "anomaly_rule": ANOMALY_RULE,
                                  "rain_location": RAIN_LOCATION, "rain_places": rain_log, "plots": per_plot} | summary)
         write_csv("uji3_plot_months.csv", [{"plot_id": pid} | r for pid, v in per_plot.items() for r in v["months"]])
         write_csv("uji3_age_signal.csv", summary["age_signal"])

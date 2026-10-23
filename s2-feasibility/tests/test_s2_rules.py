@@ -45,13 +45,14 @@ class Thresholds(unittest.TestCase):
     def test_month_rules_and_dedup(self):
         self.assertEqual(rules.MONTH_POOLING, "every clear interior pixel of every scene in the month")
         self.assertEqual(rules.MONTH_WATER_STRESS, "any scene")
+        self.assertEqual(rules.ANOMALY_MAD_K, 3.0)
         self.assertEqual(rules.DEDUP, "highest processing baseline per acquisition")
 
     def test_every_guess_is_marked(self):
         source = (Path(__file__).resolve().parents[1] / "s2_rules.py").read_text()
         for name in ("CLEAR_SHARE_MIN", "INNER_BUFFER_M", "MIN_CLEAN_PIXELS", "MIN_PIXELS_PER_STAT", "AGE_CLASSES",
                      "OFFSET_DARK_SHARE_MAX", "DARK_EVIDENCE_MIN_PIXELS", "MONTH_POOLING", "MONTH_WATER_STRESS",
-                     "DEDUP"):
+                     "ANOMALY_MAD_K", "DEDUP"):
             line = next(ln for ln in source.splitlines() if ln.startswith(f"{name} ="))
             self.assertIn("# GUESS – PENDING TEAM DECISION", line, name)
 
@@ -232,6 +233,30 @@ class MonthAggregation(unittest.TestCase):
         self.assertEqual(weather_rules.P30_THRESHOLD_MM, 60.0)
         self.assertTrue(rules.month_water_stress([dry_p30["water_stress"], wet_p30["water_stress"]]))
         self.assertFalse(rules.month_water_stress([wet_p30["water_stress"]]))
+
+
+@needs_numpy
+class AnomalyFlags(unittest.TestCase):
+    def test_one_outlier_flagged(self):
+        # median 0.55, MAD 0.01 → robust SD 0.0148, line at 3 × 0.0148 = 0.0445 from the median
+        values = [0.54, 0.55, 0.56, 0.55, 0.54, 0.56, 0.30]
+        self.assertEqual(rules.anomaly_flags(values), [False] * 6 + [True])
+
+    def test_boundary(self):
+        values = [0.54, 0.55, 0.56, 0.55, 0.54, 0.56]
+        line = 3 * rules.MAD_TO_SD * 0.01
+        self.assertEqual(rules.anomaly_flags(values + [0.55 + line - 1e-6])[-1], False)
+        self.assertEqual(rules.anomaly_flags(values + [0.55 + line + 1e-3])[-1], True)
+
+    def test_flat_or_short_series_flags_nothing(self):
+        self.assertEqual(rules.anomaly_flags([0.5, 0.5, 0.5, 0.5, 0.2]), [False] * 5)  # MAD = 0
+        self.assertEqual(rules.anomaly_flags([0.5, 0.1]), [False, False])
+        self.assertEqual(rules.anomaly_flags([]), [])
+
+    def test_k_is_a_parameter(self):
+        values = [0.54, 0.55, 0.56, 0.55, 0.54, 0.56, 0.50]  # 0.05 from the median: past 3 SD, not past 4
+        self.assertTrue(rules.anomaly_flags(values, k=3)[-1])
+        self.assertFalse(rules.anomaly_flags(values, k=4)[-1])
 
 
 class AgeSignalAndNoise(unittest.TestCase):

@@ -86,21 +86,23 @@ def _uji3(uji3):
     out += [f"Plot-month statistics need ≥ MIN_PIXELS_PER_STAT = {rules.MIN_PIXELS_PER_STAT} (GUESS) clear interior "
             f"pixels; pooling: {uji3['month_pooling']} (GUESS); a month is water_stress when "
             f"{uji3['month_water_stress']} was (GUESS), from weather/ P30.",
+            f"Anomaly months: {uji3['anomaly_rule']}. Uji 3 b is reported with and without them.",
             f"Rain for P30: {uji3['rain_location']} — {uji3['rain_places']['nasa_cells']} NASA POWER cell(s), "
             f"{uji3['rain_places']['weatherkit_areas']} WeatherKit area(s)"
             + ("" if uji3["rain_places"]["weatherkit"] else "; no WeatherKit keys, so NASA POWER alone") + ".", "",
             _table(["plot_id", "months with stats", "scenes with clear interior", "skipped: offset unresolved",
-                    "water_stress months"],
+                    "water_stress months", "anomaly months"],
                    [(pid, v["months_with_stats"], v["scenes_with_clear_interior"],
-                     v["scenes_skipped_offset_unresolved"], sum(1 for m in v["months"] if m["water_stress"] is True))
+                     v["scenes_skipped_offset_unresolved"], sum(1 for m in v["months"] if m["water_stress"] is True),
+                     _dates([m["month"] for m in v["months"] if m["anomaly"]]))
                     for pid, v in uji3["plots"].items()]),
             "", "### a) Age signal: Spearman of plot age vs annual median NDRE",
             _table(["Year", "Plots", "rho", "Note"],
                    [(a["year"], a["plots"], a["spearman_rho"], a["note"]) for a in uji3["age_signal"]]),
             "", "### b) Signal vs noise per age class (AGE_CLASSES is a GUESS)",
-            _table(["Age class", "Index", "water_stress months", "Plots", "Months", "Between", "Within", "Ratio",
-                    "ICC", "Note"],
-                   [(n["age_class"], n["index"], n["water_stress_months"], n["plots"], n["months"],
+            _table(["Age class", "Index", "water_stress months", "Anomaly months", "Plots", "Months", "Between",
+                    "Within", "Ratio", "ICC", "Note"],
+                   [(n["age_class"], n["index"], n["water_stress_months"], n["anomaly_months"], n["plots"], n["months"],
                      n.get("between_plot_variance"), n.get("within_plot_variance"), n.get("ratio"), n.get("icc"),
                      n.get("not_reported")) for n in uji3["signal_vs_noise"]])]
     if uji3["plots_without_age"]:

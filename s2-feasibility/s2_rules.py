@@ -40,6 +40,8 @@ OFFSET_DARK_SHARE_MAX = 0.05     # GUESS – PENDING TEAM DECISION: metadata say
 DARK_EVIDENCE_MIN_PIXELS = 500   # GUESS – PENDING TEAM DECISION: fewer valid pixels in the tile overview → no pixel evidence
 MONTH_POOLING = "every clear interior pixel of every scene in the month"  # GUESS – PENDING TEAM DECISION
 MONTH_WATER_STRESS = "any scene"  # GUESS – PENDING TEAM DECISION: a plot-month is water_stress when any of its scenes was
+ANOMALY_MAD_K = 3.0        # GUESS – PENDING TEAM DECISION: a plot-month is flagged when its NDRE median sits more than
+                           # this many robust SDs (1.4826 × MAD) from the plot's median over all its months
 DEDUP = "highest processing baseline per acquisition"  # GUESS – PENDING TEAM DECISION: ESA reprocessing left
                                                        # two copies of many 2019–2022 acquisitions in the catalogue
 
@@ -289,6 +291,25 @@ def month_stats(pixels_by_month, min_pixels=MIN_PIXELS_PER_STAT):
         if v.size >= min_pixels:
             out[month] = median_iqr(v)
     return out
+
+
+MAD_TO_SD = 1.4826  # MAD × this = the SD of normally distributed values: k is then in familiar units
+
+
+def anomaly_flags(values, k=ANOMALY_MAD_K):
+    """One flag per value: True when |value − median| > k × 1.4826 × MAD, all over the plot's months.
+
+    MAD (median absolute deviation) is a spread that a few extreme months can't drag along, unlike the SD. Fewer
+    than 3 values, or MAD = 0 (most months equal), flags nothing: there is no spread to measure against.
+    """
+    v = [float(x) for x in values]
+    if len(v) < 3:
+        return [False] * len(v)
+    med = float(np.median(v))
+    mad = float(np.median([abs(x - med) for x in v]))
+    if mad == 0:
+        return [False] * len(v)
+    return [abs(x - med) > k * MAD_TO_SD * mad for x in v]
 
 
 def month_water_stress(flags):
