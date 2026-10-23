@@ -13,7 +13,6 @@ from pyproj import Transformer
 from rasterio.windows import Window
 from rasterio.windows import transform as window_transform
 from shapely.geometry import Point, shape
-from shapely.ops import transform as reproject
 
 import s2_rules as rules
 
@@ -26,7 +25,7 @@ def utm_crs(lon, lat):
 
 
 def project(geom, src, dst):
-    return reproject(Transformer.from_crs(src, dst, always_xy=True).transform, geom)
+    return shapely.transform(geom, Transformer.from_crs(src, dst, always_xy=True).transform, interleaved=False)
 
 
 def load_plots(path, lat, lon):
