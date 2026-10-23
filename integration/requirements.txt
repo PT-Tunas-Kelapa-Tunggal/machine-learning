@@ -1,0 +1,15 @@
+# integration.ipynb: segmentation → VARI per tree and zone → zone fertilizer boost.
+# macOS only (Core ML prediction runs on macOS):
+#   conda create -n vari-confidence python=3.12 && conda activate vari-confidence
+#   pip install -r requirements.txt
+
+# Segmentation, tree detection, VARI and the figures
+coremltools
+opencv-python
+numpy
+pillow
+matplotlib
+
+# Notebook
+jupyterlab
+ipykernel

@@ -20,3 +20,5 @@ vari-confidence/outputs/
 s2-feasibility/data/private/
 s2-feasibility/data/cache/
 s2-feasibility/outputs/
+# Integration notebook: generated images, crops, CSV and JSON
+integration/oil_palm_*
