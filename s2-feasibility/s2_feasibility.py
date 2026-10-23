@@ -27,6 +27,7 @@ from dotenv import load_dotenv
 
 import s2_fetch as fetch
 import s2_geom as geom
+import s2_report as report
 import s2_rules as rules
 
 HERE = Path(__file__).resolve().parent
@@ -366,8 +367,9 @@ def main():
         "catalogue": catalogue_log,
         "offset": offsets,
     })
+    report.build(OUT_DIR)
     scan_outputs()
-    print(f"Uji 1{'' if proxy else '–3'} written to {OUT_DIR.relative_to(ROOT)}/ for {len(plots)} plot(s)")
+    print(f"Uji 1{'' if proxy else '–3'} and REPORT.md written to outputs/s2_feasibility/ for {len(plots)} plot(s)")
 
 
 if __name__ == "__main__":
