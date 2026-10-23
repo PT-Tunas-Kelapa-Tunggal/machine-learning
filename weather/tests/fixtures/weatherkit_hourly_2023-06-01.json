@@ -1,0 +1,175 @@
+{
+ "about": "WeatherKit hourly history recorded on 14 Oct 2026 for the trial plot, 1 Jun 2023 00:00-24:00 WIB, trimmed to the fields the job reads; location and metadata removed. A wet morning: about 5 mm an hour at 09:00-11:00.",
+ "hourlyStart": "2023-05-31T17:00:00Z",
+ "hourlyEnd": "2023-06-01T17:00:00Z",
+ "hours": [
+  {
+   "forecastStart": "2023-05-31T17:00:00Z",
+   "cloudCover": 0.4,
+   "precipitationAmount": 0.03,
+   "daylight": false,
+   "conditionCode": "PartlyCloudy"
+  },
+  {
+   "forecastStart": "2023-05-31T18:00:00Z",
+   "cloudCover": 0.6,
+   "precipitationAmount": 0.03,
+   "daylight": false,
+   "conditionCode": "PartlyCloudy"
+  },
+  {
+   "forecastStart": "2023-05-31T19:00:00Z",
+   "cloudCover": 0.59,
+   "precipitationAmount": 0.27,
+   "daylight": false,
+   "conditionCode": "PartlyCloudy"
+  },
+  {
+   "forecastStart": "2023-05-31T20:00:00Z",
+   "cloudCover": 0.61,
+   "precipitationAmount": 0.41,
+   "daylight": false,
+   "conditionCode": "PartlyCloudy"
+  },
+  {
+   "forecastStart": "2023-05-31T21:00:00Z",
+   "cloudCover": 0.65,
+   "precipitationAmount": 0.08,
+   "daylight": false,
+   "conditionCode": "MostlyCloudy"
+  },
+  {
+   "forecastStart": "2023-05-31T22:00:00Z",
+   "cloudCover": 0.71,
+   "precipitationAmount": 0.33,
+   "daylight": false,
+   "conditionCode": "MostlyCloudy"
+  },
+  {
+   "forecastStart": "2023-05-31T23:00:00Z",
+   "cloudCover": 0.67,
+   "precipitationAmount": 0.2,
+   "daylight": true,
+   "conditionCode": "MostlyCloudy"
+  },
+  {
+   "forecastStart": "2023-06-01T00:00:00Z",
+   "cloudCover": 0.69,
+   "precipitationAmount": 3.59,
+   "daylight": true,
+   "conditionCode": "MostlyCloudy"
+  },
+  {
+   "forecastStart": "2023-06-01T01:00:00Z",
+   "cloudCover": 0.88,
+   "precipitationAmount": 1.94,
+   "daylight": true,
+   "conditionCode": "Cloudy"
+  },
+  {
+   "forecastStart": "2023-06-01T02:00:00Z",
+   "cloudCover": 0.92,
+   "precipitationAmount": 5.19,
+   "daylight": true,
+   "conditionCode": "Rain"
+  },
+  {
+   "forecastStart": "2023-06-01T03:00:00Z",
+   "cloudCover": 0.99,
+   "precipitationAmount": 5.09,
+   "daylight": true,
+   "conditionCode": "Rain"
+  },
+  {
+   "forecastStart": "2023-06-01T04:00:00Z",
+   "cloudCover": 0.96,
+   "precipitationAmount": 2.31,
+   "daylight": true,
+   "conditionCode": "Rain"
+  },
+  {
+   "forecastStart": "2023-06-01T05:00:00Z",
+   "cloudCover": 0.92,
+   "precipitationAmount": 2.1,
+   "daylight": true,
+   "conditionCode": "Cloudy"
+  },
+  {
+   "forecastStart": "2023-06-01T06:00:00Z",
+   "cloudCover": 0.91,
+   "precipitationAmount": 0.9,
+   "daylight": true,
+   "conditionCode": "Cloudy"
+  },
+  {
+   "forecastStart": "2023-06-01T07:00:00Z",
+   "cloudCover": 0.84,
+   "precipitationAmount": 2.15,
+   "daylight": true,
+   "conditionCode": "MostlyCloudy"
+  },
+  {
+   "forecastStart": "2023-06-01T08:00:00Z",
+   "cloudCover": 0.83,
+   "precipitationAmount": 2.09,
+   "daylight": true,
+   "conditionCode": "MostlyCloudy"
+  },
+  {
+   "forecastStart": "2023-06-01T09:00:00Z",
+   "cloudCover": 0.88,
+   "precipitationAmount": 2.29,
+   "daylight": true,
+   "conditionCode": "Cloudy"
+  },
+  {
+   "forecastStart": "2023-06-01T10:00:00Z",
+   "cloudCover": 0.86,
+   "precipitationAmount": 1.5,
+   "daylight": true,
+   "conditionCode": "MostlyCloudy"
+  },
+  {
+   "forecastStart": "2023-06-01T11:00:00Z",
+   "cloudCover": 0.93,
+   "precipitationAmount": 0.48,
+   "daylight": true,
+   "conditionCode": "Cloudy"
+  },
+  {
+   "forecastStart": "2023-06-01T12:00:00Z",
+   "cloudCover": 0.92,
+   "precipitationAmount": 0.0,
+   "daylight": false,
+   "conditionCode": "Cloudy"
+  },
+  {
+   "forecastStart": "2023-06-01T13:00:00Z",
+   "cloudCover": 0.94,
+   "precipitationAmount": 0.0,
+   "daylight": false,
+   "conditionCode": "Cloudy"
+  },
+  {
+   "forecastStart": "2023-06-01T14:00:00Z",
+   "cloudCover": 0.92,
+   "precipitationAmount": 0.0,
+   "daylight": false,
+   "conditionCode": "Cloudy"
+  },
+  {
+   "forecastStart": "2023-06-01T15:00:00Z",
+   "cloudCover": 0.93,
+   "precipitationAmount": 0.0,
+   "daylight": false,
+   "conditionCode": "Cloudy"
+  },
+  {
+   "forecastStart": "2023-06-01T16:00:00Z",
+   "cloudCover": 0.93,
+   "precipitationAmount": 0.0,
+   "daylight": false,
+   "conditionCode": "Cloudy"
+  }
+ ]
+}
