@@ -28,6 +28,7 @@ from dotenv import load_dotenv
 
 import s2_fetch as fetch
 import s2_geom as geom
+import s2_rain
 import s2_report as report
 import s2_rules as rules
 
@@ -41,21 +42,21 @@ LAT, LON = float(os.environ["LAT"]), float(os.environ["LON"])
 THREADS = 12
 
 WEATHER_DIR = ROOT / "weather"
-RAIN_AS_OF = date(2026, 10, 11)  # weather notebook 1's run: Uji 3 reads that day's saved rain, as notebook 03 does
-RAIN_END = date(2026, 10, 8)     # NASA POWER's last day of rain in that run
-WK_FROM = date(2021, 8, 1)       # WeatherKit history starts here
 
 
 # ============================================================
 # CATALOGUE AND TILES
 # ============================================================
 
+def month_end(month):
+    after = rules.months(month, (month[0] + 1, 1))[1]
+    return date(*after, 1) - timedelta(days=1)
+
+
 def catalogue(plots, first, last):
     """Items over all plots, COGs only, one per acquisition. Returns (kept, log)."""
-    after_last = rules.months(last, (last[0] + 1, 1))[1]
-    end = date(*after_last, 1) - timedelta(days=1)
     features = fetch.search_items(shapely.union_all([p["geometry"] for p in plots]), date(*first, 1).isoformat(),
-                                  end.isoformat())
+                                  month_end(last).isoformat())
     records = [fetch.item_record(f) for f in features]
     cog = [r for r in records if r["cog"]]
     kept, dropped = rules.dedup_items(cog)
@@ -173,6 +174,8 @@ def uji1(plot, items, first, last):
 # UJI 2
 # ============================================================
 
+RAIN_LOCATION = ("each plot's centroid, on the weather job's grid: NASA POWER cell (checked as the job checks it) "
+                 "and WeatherKit 0.1° area")
 NOT_RUN_PROXY = ("s2-feasibility/data/private/plots.geojson is missing: the brief runs Uji 2–3 on real plots only, so this "
                  "run checked them on synthetic tests alone")
 
@@ -192,27 +195,11 @@ def uji2(plots, placed):
 # UJI 3
 # ============================================================
 
-def rain_sources():
-    """Daily rain per source, built as weather notebook 03 builds it: the same calls on the same saved responses.
-
-    P30 and water_stress then come from weather/l2_scan_rain.p30_at (krops_rules.choose_p30), imported, not copied.
-    """
-    sys.path.insert(0, str(WEATHER_DIR))
-    import pandas as pd
-    import krops_weather as kw
-
-    history, _, _ = kw.fetch_nasa_power(date(1991, 1, 1), date(2025, 12, 31), params=("PRECTOTCORR",))
-    this_year, _, _ = kw.fetch_nasa_power(date(2026, 1, 1), RAIN_AS_OF, forever=True)
-    nasa_all = pd.concat([history["PRECTOTCORR"], this_year["PRECTOTCORR"]]).dropna()
-    nasa_all = nasa_all[~nasa_all.index.duplicated(keep="last")].sort_index()
-    wk_rain = kw.fetch_weatherkit_history(WK_FROM, RAIN_END, forever=True)["rain_mm"].dropna()
-    check = kw.suspect_months(nasa_all[nasa_all.index >= WK_FROM], kw.monthly_normals(nasa_all), wk_rain)
-    nasa_ok = kw.drop_months(nasa_all, check.index[check["suspect"]])
-    return {"weatherkit-history": wk_rain.to_dict(), "nasa-power": nasa_ok.dropna().to_dict()}
-
-
 def uji3_plot(ctx, decisions, sources):
-    """Monthly NDRE and CIre (median, IQR) over the clear interior pixels, each month annotated with L5 P30."""
+    """Monthly NDRE and CIre (median, IQR) over the clear interior pixels, each month annotated with L5 P30.
+
+    `sources` is this plot's own rain (s2_rain.rain_by_plot, from its centroid), never the .env point's.
+    """
     sys.path.insert(0, str(WEATHER_DIR))
     import l2_scan_rain as l2
 
@@ -309,9 +296,23 @@ def write_csv(name, rows):
             w.writerows(rows)
 
 
-def scan_outputs():
+def known_locations(plots):
+    """Strings that would give a location away: the .env longitude and each plot centroid's, at 2–4 decimals.
+
+    A latitude this near the equator reads like an index value, so it is only searched for at 3+ decimals.
+    """
+    known = [os.environ["LON"].strip()]
+    if len(os.environ["LAT"].split(".")[-1]) > 2:
+        known.append(os.environ["LAT"].strip())
+    for plot in plots:
+        c = plot["geometry"].centroid
+        known += [f"{c.x:.{n}f}" for n in (2, 3, 4)] + [f"{c.y:.{n}f}" for n in (3, 4)]
+    return known
+
+
+def scan_outputs(plots):
     """Fail the run if any output looks like it holds a location."""
-    known = [os.environ["LON"].strip(), os.environ["LAT"].strip() if len(os.environ["LAT"].split(".")[-1]) > 2 else ""]
+    known = known_locations(plots)
     bad = {p.name: hits for p in sorted(OUT_DIR.iterdir()) if p.is_file()
            if (hits := rules.find_coordinates(p.read_text(), known))}
     if bad:
@@ -347,12 +348,12 @@ def main():
     if proxy:
         write_json("uji3.json", {"not_run": NOT_RUN_PROXY})
     else:
-        sources = rain_sources()
-        per_plot = {p["plot_id"]: uji3_plot(placed[p["plot_id"]], decisions, sources)
+        sources, rain_log = s2_rain.rain_for(plots, month_end(last))
+        per_plot = {p["plot_id"]: uji3_plot(placed[p["plot_id"]], decisions, sources[p["plot_id"]])
                     for p in plots if placed[p["plot_id"]] is not None}
         summary = uji3_summary(plots, per_plot, fetch.TODAY.year)
         write_json("uji3.json", {"month_pooling": rules.MONTH_POOLING, "month_water_stress": rules.MONTH_WATER_STRESS,
-                                 "plots": per_plot} | summary)
+                                 "rain_location": RAIN_LOCATION, "rain_places": rain_log, "plots": per_plot} | summary)
         write_csv("uji3_plot_months.csv", [{"plot_id": pid} | r for pid, v in per_plot.items() for r in v["months"]])
         write_csv("uji3_age_signal.csv", summary["age_signal"])
         write_csv("uji3_signal_vs_noise.csv", summary["signal_vs_noise"])
@@ -369,7 +370,7 @@ def main():
         "offset": offsets,
     })
     report.build(OUT_DIR)
-    scan_outputs()
+    scan_outputs(plots)
     print(f"Uji 1{'' if proxy else '–3'} and REPORT.md written to s2-feasibility/outputs/ for {len(plots)} plot(s)")
 
 

@@ -85,7 +85,10 @@ def _uji3(uji3):
         return out + [f"Not run: {uji3['not_run']}."]
     out += [f"Plot-month statistics need ≥ MIN_PIXELS_PER_STAT = {rules.MIN_PIXELS_PER_STAT} (GUESS) clear interior "
             f"pixels; pooling: {uji3['month_pooling']} (GUESS); a month is water_stress when "
-            f"{uji3['month_water_stress']} was (GUESS), from weather/ P30.", "",
+            f"{uji3['month_water_stress']} was (GUESS), from weather/ P30.",
+            f"Rain for P30: {uji3['rain_location']} — {uji3['rain_places']['nasa_cells']} NASA POWER cell(s), "
+            f"{uji3['rain_places']['weatherkit_areas']} WeatherKit area(s)"
+            + ("" if uji3["rain_places"]["weatherkit"] else "; no WeatherKit keys, so NASA POWER alone") + ".", "",
             _table(["plot_id", "months with stats", "scenes with clear interior", "skipped: offset unresolved",
                     "water_stress months"],
                    [(pid, v["months_with_stats"], v["scenes_with_clear_interior"],
