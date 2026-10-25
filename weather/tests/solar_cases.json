@@ -1,0 +1,424 @@
+{
+ "version": 1,
+ "about": "Reference values for weather/solar.py. The Swift port runs the same cases.",
+ "encoding": {
+  "utc": "ISO 8601, UTC",
+  "date": "YYYY-MM-DD",
+  "angles": "degrees",
+  "tolerance": "absolute, in the unit of the value; per key for solar_position",
+  "solar_position": "only the keys listed under tolerance are compared"
+ },
+ "generated_with": "pvlib 0.16.1",
+ "cases": [
+  {
+   "function": "julian_day",
+   "name": "julian day: J2000 epoch",
+   "input": {
+    "utc": "2000-01-01T12:00:00Z"
+   },
+   "expected": 2451545.0,
+   "tolerance": 1e-09,
+   "source": "definition"
+  },
+  {
+   "function": "julian_day",
+   "name": "julian day: Unix epoch",
+   "input": {
+    "utc": "1970-01-01T00:00:00Z"
+   },
+   "expected": 2440587.5,
+   "tolerance": 1e-09,
+   "source": "definition"
+  },
+  {
+   "function": "day_of_year",
+   "name": "day of year: 3 Sep (FAO-56 Example 8)",
+   "input": {
+    "date": "2026-09-03"
+   },
+   "expected": 246,
+   "tolerance": 0,
+   "source": "FAO-56 Example 8"
+  },
+  {
+   "function": "day_of_year",
+   "name": "day of year: 31 Dec of a leap year",
+   "input": {
+    "date": "2024-12-31"
+   },
+   "expected": 366,
+   "tolerance": 0,
+   "source": "calendar"
+  },
+  {
+   "function": "solar_position",
+   "name": "sun: trial site, 10:00 WIB (a morning scan)",
+   "input": {
+    "lat": 0.92,
+    "lon": 104.45,
+    "utc": "2026-10-11T03:00:00Z"
+   },
+   "expected": {
+    "zenith_deg": 28.317153,
+    "elevation_deg": 61.682847,
+    "true_zenith_deg": 28.326222,
+    "azimuth_deg": 106.641716
+   },
+   "tolerance": {
+    "true_zenith_deg": 0.02,
+    "zenith_deg": 0.02,
+    "elevation_deg": 0.02,
+    "azimuth_deg": 0.05
+   },
+   "source": "pvlib NREL SPA"
+  },
+  {
+   "function": "solar_position",
+   "name": "sun: trial site, near noon",
+   "input": {
+    "lat": 0.92,
+    "lon": 104.45,
+    "utc": "2026-10-11T05:00:00Z"
+   },
+   "expected": {
+    "zenith_deg": 8.400885,
+    "elevation_deg": 81.599115,
+    "true_zenith_deg": 8.403351
+   },
+   "tolerance": {
+    "true_zenith_deg": 0.02,
+    "zenith_deg": 0.02,
+    "elevation_deg": 0.02
+   },
+   "source": "pvlib NREL SPA"
+  },
+  {
+   "function": "solar_position",
+   "name": "sun: trial site, 15:30 WIB",
+   "input": {
+    "lat": 0.92,
+    "lon": 104.45,
+    "utc": "2026-10-11T08:30:00Z"
+   },
+   "expected": {
+    "zenith_deg": 55.678421,
+    "elevation_deg": 34.321579,
+    "true_zenith_deg": 55.703008,
+    "azimuth_deg": 260.784966
+   },
+   "tolerance": {
+    "true_zenith_deg": 0.02,
+    "zenith_deg": 0.02,
+    "elevation_deg": 0.02,
+    "azimuth_deg": 0.05
+   },
+   "source": "pvlib NREL SPA"
+  },
+  {
+   "function": "solar_position",
+   "name": "sun: trial site, just after sunrise",
+   "input": {
+    "lat": 0.92,
+    "lon": 104.45,
+    "utc": "2026-03-20T23:20:00Z"
+   },
+   "expected": {
+    "zenith_deg": 87.129976,
+    "elevation_deg": 2.870024,
+    "true_zenith_deg": 87.374813,
+    "azimuth_deg": 89.900789
+   },
+   "tolerance": {
+    "true_zenith_deg": 0.02,
+    "zenith_deg": 0.5,
+    "elevation_deg": 0.5,
+    "azimuth_deg": 0.05
+   },
+   "source": "pvlib NREL SPA"
+  },
+  {
+   "function": "solar_position",
+   "name": "sun: trial site, night",
+   "input": {
+    "lat": 0.92,
+    "lon": 104.45,
+    "utc": "2026-10-11T15:00:00Z"
+   },
+   "expected": {
+    "true_zenith_deg": 152.145175,
+    "azimuth_deg": 256.280966
+   },
+   "tolerance": {
+    "true_zenith_deg": 0.02,
+    "azimuth_deg": 0.05
+   },
+   "source": "pvlib NREL SPA"
+  },
+  {
+   "function": "solar_position",
+   "name": "sun: Jakarta, June solstice",
+   "input": {
+    "lat": -6.2,
+    "lon": 106.8,
+    "utc": "2026-06-21T04:00:00Z"
+   },
+   "expected": {
+    "zenith_deg": 32.483479,
+    "elevation_deg": 57.516521,
+    "true_zenith_deg": 32.494197,
+    "azimuth_deg": 23.744117
+   },
+   "tolerance": {
+    "true_zenith_deg": 0.02,
+    "zenith_deg": 0.02,
+    "elevation_deg": 0.02,
+    "azimuth_deg": 0.05
+   },
+   "source": "pvlib NREL SPA"
+  },
+  {
+   "function": "solar_position",
+   "name": "sun: Dumai, December solstice",
+   "input": {
+    "lat": 1.67,
+    "lon": 101.45,
+    "utc": "2026-12-21T06:30:00Z"
+   },
+   "expected": {
+    "zenith_deg": 31.438231,
+    "elevation_deg": 58.561769,
+    "true_zenith_deg": 31.448522,
+    "azimuth_deg": 215.87037
+   },
+   "tolerance": {
+    "true_zenith_deg": 0.02,
+    "zenith_deg": 0.02,
+    "elevation_deg": 0.02,
+    "azimuth_deg": 0.05
+   },
+   "source": "pvlib NREL SPA"
+  },
+  {
+   "function": "solar_position",
+   "name": "sun: southern mid-latitude",
+   "input": {
+    "lat": -33.9,
+    "lon": 151.2,
+    "utc": "2025-01-15T02:00:00Z"
+   },
+   "expected": {
+    "zenith_deg": 12.83513,
+    "elevation_deg": 77.16487,
+    "true_zenith_deg": 12.838951
+   },
+   "tolerance": {
+    "true_zenith_deg": 0.02,
+    "zenith_deg": 0.02,
+    "elevation_deg": 0.02
+   },
+   "source": "pvlib NREL SPA"
+  },
+  {
+   "function": "solar_position",
+   "name": "sun: west longitude, afternoon",
+   "input": {
+    "lat": 40.0,
+    "lon": -105.0,
+    "utc": "2026-07-04T21:00:00Z"
+   },
+   "expected": {
+    "zenith_deg": 29.813576,
+    "elevation_deg": 60.186424,
+    "true_zenith_deg": 29.823222,
+    "azimuth_deg": 243.506815
+   },
+   "tolerance": {
+    "true_zenith_deg": 0.02,
+    "zenith_deg": 0.02,
+    "elevation_deg": 0.02,
+    "azimuth_deg": 0.05
+   },
+   "source": "pvlib NREL SPA"
+  },
+  {
+   "function": "solar_position",
+   "name": "sun: J2000 epoch at 0°, 0°",
+   "input": {
+    "lat": 0.0,
+    "lon": 0.0,
+    "utc": "2000-01-01T12:00:00Z"
+   },
+   "expected": {
+    "zenith_deg": 23.040138,
+    "elevation_deg": 66.959862,
+    "true_zenith_deg": 23.047294,
+    "azimuth_deg": 178.068953
+   },
+   "tolerance": {
+    "true_zenith_deg": 0.02,
+    "zenith_deg": 0.02,
+    "elevation_deg": 0.02,
+    "azimuth_deg": 0.05
+   },
+   "source": "pvlib NREL SPA"
+  },
+  {
+   "function": "extraterrestrial_daily",
+   "name": "Ra: FAO-56 Example 8 (20°S, 3 Sep)",
+   "input": {
+    "lat": -20.0,
+    "doy": 246
+   },
+   "expected": 32.2,
+   "tolerance": 0.05,
+   "source": "FAO-56 Example 8"
+  },
+  {
+   "function": "extraterrestrial_daily",
+   "name": "Ra: trial site, 1 Jan",
+   "input": {
+    "lat": 0.92,
+    "doy": 1
+   },
+   "expected": 35.4257,
+   "tolerance": 0.3543,
+   "source": "pvlib extraterrestrial irradiance integrated over the day (1-min steps), ±1%"
+  },
+  {
+   "function": "extraterrestrial_daily",
+   "name": "Ra: trial site, March equinox",
+   "input": {
+    "lat": 0.92,
+    "doy": 80
+   },
+   "expected": 37.8584,
+   "tolerance": 0.3786,
+   "source": "pvlib extraterrestrial irradiance integrated over the day (1-min steps), ±1%"
+  },
+  {
+   "function": "extraterrestrial_daily",
+   "name": "Ra: trial site, June solstice",
+   "input": {
+    "lat": 0.92,
+    "doy": 172
+   },
+   "expected": 33.7132,
+   "tolerance": 0.3371,
+   "source": "pvlib extraterrestrial irradiance integrated over the day (1-min steps), ±1%"
+  },
+  {
+   "function": "extraterrestrial_daily",
+   "name": "Ra: trial site, 3 Sep",
+   "input": {
+    "lat": 0.92,
+    "doy": 246
+   },
+   "expected": 36.705,
+   "tolerance": 0.3671,
+   "source": "pvlib extraterrestrial irradiance integrated over the day (1-min steps), ±1%"
+  },
+  {
+   "function": "extraterrestrial_daily",
+   "name": "Ra: 6.2°S, December solstice",
+   "input": {
+    "lat": -6.2,
+    "doy": 355
+   },
+   "expected": 38.1108,
+   "tolerance": 0.3811,
+   "source": "pvlib extraterrestrial irradiance integrated over the day (1-min steps), ±1%"
+  },
+  {
+   "function": "clear_sky_fao56",
+   "name": "Rso: sea level is 0.75 Ra",
+   "input": {
+    "ra": 36.0,
+    "elevation_m": 0.0
+   },
+   "expected": 27.0,
+   "tolerance": 1e-09,
+   "source": "FAO-56 eq. 37"
+  },
+  {
+   "function": "clear_sky_fao56",
+   "name": "Rso: 500 m adds 1% of Ra",
+   "input": {
+    "ra": 36.0,
+    "elevation_m": 500.0
+   },
+   "expected": 27.36,
+   "tolerance": 1e-09,
+   "source": "FAO-56 eq. 37"
+  },
+  {
+   "function": "haurwitz_ghi",
+   "name": "haurwitz: zenith 0°",
+   "input": {
+    "zenith_deg": 0.0
+   },
+   "expected": 1035.092033,
+   "tolerance": 1e-05,
+   "source": "pvlib clearsky.haurwitz"
+  },
+  {
+   "function": "haurwitz_ghi",
+   "name": "haurwitz: zenith 30°",
+   "input": {
+    "zenith_deg": 30.0
+   },
+   "expected": 888.271335,
+   "tolerance": 1e-05,
+   "source": "pvlib clearsky.haurwitz"
+  },
+  {
+   "function": "haurwitz_ghi",
+   "name": "haurwitz: zenith 60°",
+   "input": {
+    "zenith_deg": 60.0
+   },
+   "expected": 487.894133,
+   "tolerance": 1e-05,
+   "source": "pvlib clearsky.haurwitz"
+  },
+  {
+   "function": "haurwitz_ghi",
+   "name": "haurwitz: zenith 85°",
+   "input": {
+    "zenith_deg": 85.0
+   },
+   "expected": 48.629869,
+   "tolerance": 1e-05,
+   "source": "pvlib clearsky.haurwitz"
+  },
+  {
+   "function": "haurwitz_ghi",
+   "name": "haurwitz: zenith 89.5°",
+   "input": {
+    "zenith_deg": 89.5
+   },
+   "expected": 0.011096,
+   "tolerance": 1e-05,
+   "source": "pvlib clearsky.haurwitz"
+  },
+  {
+   "function": "haurwitz_ghi",
+   "name": "haurwitz: zenith 90°",
+   "input": {
+    "zenith_deg": 90.0
+   },
+   "expected": 0.0,
+   "tolerance": 1e-05,
+   "source": "pvlib clearsky.haurwitz"
+  },
+  {
+   "function": "haurwitz_ghi",
+   "name": "haurwitz: zenith 120°",
+   "input": {
+    "zenith_deg": 120.0
+   },
+   "expected": 0.0,
+   "tolerance": 1e-05,
+   "source": "pvlib clearsky.haurwitz"
+  }
+ ]
+}

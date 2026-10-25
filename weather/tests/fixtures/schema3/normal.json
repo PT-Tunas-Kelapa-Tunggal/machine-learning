@@ -1,0 +1,66 @@
+{
+ "schema": 3,
+ "generated_at": "2026-10-14T06:15:00Z",
+ "l5": {
+  "p30_mm": 110.8,
+  "p30_start_date": "2026-09-14",
+  "p30_end_date": "2026-10-13",
+  "p30_source": "weatherkit-history",
+  "p30_quality": "ok",
+  "water_stress": false,
+  "p30_missing_days": {
+   "weatherkit-history": 0,
+   "nasa-power": 0
+  }
+ },
+ "stage_a": {
+  "1": {
+   "avg_mm": 210.0
+  },
+  "2": {
+   "avg_mm": 110.0
+  },
+  "3": {
+   "avg_mm": 170.0
+  },
+  "4": {
+   "avg_mm": 205.0
+  },
+  "5": {
+   "avg_mm": 205.0
+  },
+  "6": {
+   "avg_mm": 175.0
+  },
+  "7": {
+   "avg_mm": 175.0
+  },
+  "8": {
+   "avg_mm": 170.0
+  },
+  "9": {
+   "avg_mm": 165.0
+  },
+  "10": {
+   "avg_mm": 210.0
+  },
+  "11": {
+   "avg_mm": 300.0
+  },
+  "12": {
+   "avg_mm": 320.0
+  }
+ },
+ "attribution": [
+  {
+   "source": "apple-weather",
+   "text": "Apple Weather",
+   "url": "https://developer.apple.com/weatherkit/data-source-attribution/"
+  },
+  {
+   "source": "nasa-power",
+   "text": "These data were obtained from the NASA Langley Research Center (LaRC) POWER Project funded through the NASA Earth Science/Applied Science Program.",
+   "url": "https://power.larc.nasa.gov"
+  }
+ ]
+}
