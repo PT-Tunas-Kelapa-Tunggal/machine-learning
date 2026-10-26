@@ -10,6 +10,13 @@ numpy
 pillow
 matplotlib
 
+# weather_fertilizer.ipynb: WeatherKit and NASA POWER through ../weather (credentials in weather/.env)
+requests
+pyjwt
+cryptography
+pandas
+python-dotenv
+
 # Notebook
 jupyterlab
 ipykernel
