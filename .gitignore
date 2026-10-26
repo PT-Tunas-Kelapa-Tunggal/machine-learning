@@ -23,3 +23,7 @@ s2-feasibility/outputs/
 
 # Integration notebook: generated images, crops, CSV and JSON
 integration/oil_palm_*
+
+# Python packaging: build metadata from pip install -e
+*.egg-info/
+build/
