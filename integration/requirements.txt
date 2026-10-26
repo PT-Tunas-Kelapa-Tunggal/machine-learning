@@ -17,6 +17,11 @@ cryptography
 pandas
 python-dotenv
 
+# krops_vari HTTP API (also: pip install -e "integration[api]")
+fastapi
+uvicorn
+python-multipart
+
 # Notebook
 jupyterlab
 ipykernel
