@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "krops-vari"
+version = "0.1.0"
+description = "Krops VARI backend: zones, confidence, Mg/N boost and the spreading plan from one drone photo"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "opencv-python",
+    "pillow",
+    "coremltools; sys_platform == 'darwin'",
+    "requests",
+    "pyjwt",
+    "cryptography",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+api = ["fastapi", "uvicorn", "python-multipart"]
+
+[project.scripts]
+krops-vari = "krops_vari.main:main"
+
+[tool.setuptools]
+packages = ["krops_vari"]
