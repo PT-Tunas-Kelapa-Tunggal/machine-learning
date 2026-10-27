@@ -1,6 +1,10 @@
 .DS_Store
 .ipynb_checkpoints/
 __pycache__/
+.venv/
+.build/
+*.tar.gz
+*.sha256
 
 # Secrets: WeatherKit keys and the plot's coordinates
 .env
