@@ -4,7 +4,7 @@ import unittest
 
 from krops_vari.boost import add_zone_boost_and_fertilizer, product_mass_rows
 from krops_vari.config import Settings
-from krops_vari.confidence import zone_confidence
+from krops_vari.confidence import flight_gate_flag, zone_confidence
 
 
 def zone(zone_id, trees, leaf_px, mean, box=(100, 100, 200, 200)):
@@ -52,6 +52,50 @@ class ZoneConfidence(unittest.TestCase):
         self.assertAlmostEqual(by_id[1], 0.60)
         self.assertTrue(zones[0]["confidence"]["may_be_less_accurate"])
         self.assertTrue(any("not computed" in f for f in flags))
+
+
+class FlightGate(unittest.TestCase):
+    """Team decision (23 Oct 2026): a low or incomplete flight is flagged on every zone; the dose is still given."""
+
+    def setUp(self):
+        self.s = Settings()
+
+    def run_flight(self, flight_result):
+        zones = [zone(1, 9, 9000, 0.2), zone(2, 9, 9000, 0.3)]
+        by_id, _, flags = zone_confidence(zones, trees(20), (1000, 1000), self.s,
+                                          flight_result["confidence"], flight_result)
+        return zones, by_id, flags
+
+    def test_low_flight_flags_every_zone_with_its_reasons(self):
+        zones, by_id, flags = self.run_flight({"confidence": 0.35, "label": "rendah", "final": True,
+                                               "reasons": [{"code": "wet_rain_before"}, {"code": "cloud_overcast"}]})
+        for z in zones:  # full 9-tree zones, which would otherwise carry no flag
+            self.assertTrue(z["confidence"]["may_be_less_accurate"])
+            self.assertTrue(any("low flight confidence 0.35 (wet_rain_before, cloud_overcast)" in f
+                                for f in z["confidence"]["flags"]), z["confidence"]["flags"])
+        self.assertAlmostEqual(by_id[1], 0.35)  # the dose is still given, scaled by the confidence
+        self.assertTrue(any("doses still given" in f for f in flags))
+
+    def test_incomplete_flight_is_flagged(self):
+        zones, _, _ = self.run_flight({"confidence": 0.6, "label": "sedang", "final": False, "reasons": []})
+        self.assertTrue(any("not final" in f for f in zones[0]["confidence"]["flags"]))
+        self.assertTrue(zones[0]["confidence"]["may_be_less_accurate"])
+
+    def test_good_flight_is_not_flagged(self):
+        zones, _, flags = self.run_flight({"confidence": 0.85, "label": "tinggi", "final": True,
+                                           "reasons": [{"code": "cloud_overcast"}]})
+        self.assertEqual(zones[0]["confidence"]["flags"], [])
+        self.assertFalse(zones[0]["confidence"]["may_be_less_accurate"])
+        self.assertFalse(any("flight gate" in f for f in flags))
+
+    def test_flagged_even_when_not_multiplied_in(self):
+        zones = [zone(1, 9, 9000, 0.2)]
+        zone_confidence(zones, trees(20), (1000, 1000), self.s, None,
+                        {"confidence": 0.3, "label": "rendah", "final": True, "reasons": []})
+        self.assertTrue(any("low flight confidence" in f for f in zones[0]["confidence"]["flags"]))
+
+    def test_no_result_no_flag(self):
+        self.assertIsNone(flight_gate_flag(None))
 
 
 class Boost(unittest.TestCase):
