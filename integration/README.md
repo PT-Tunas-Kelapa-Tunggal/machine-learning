@@ -57,8 +57,27 @@ python -m krops_vari.main --photo dji_10.jpg --plot-id P01 --plots plots.json \
 ## HTTP API
 
 ```bash
-KROPS_PLOTS=/srv/krops/plots.json uvicorn krops_vari.api:app --host 0.0.0.0 --port 8000
+uvicorn krops_vari.api:app --host 127.0.0.1 --port 8000
 ```
+
+That is all a photo-only scan needs. The plot file is optional: add it only for the weather features.
+
+| A scan with | Needs the plot file | Adds |
+|---|---|---|
+| a photo | no | zones, confidence (0.60 stands in for the flight part), boost, Mg/N product mass |
+| + `plot_id` | yes | the spreading plan (P30, the month gate, safe days, which product on which day) |
+| + `plot_id` and flight times | yes | the L6 flight confidence, which replaces the 0.60 |
+
+The plot file is a JSON list of `{plot_id, lat, lon}`. The weather is looked up by location, but the app sends only
+the `plot_id`, so the coordinates stay on the server. Keep the file outside the repo, e.g. `~/krops/plots.json` on a Mac:
+
+```bash
+KROPS_PLOTS=~/krops/plots.json KROPS_DATA_DIR=~/krops/data \
+    uvicorn krops_vari.api:app --host 127.0.0.1 --port 8000
+```
+
+A `plot_id` the file doesn't list (or no file at all) gets `404 unknown plot_id`. The file is read on each request,
+so new plots need no restart. Use `--host 0.0.0.0` only on a trusted network: the API has no login yet.
 
 | Request | Answer |
 |---|---|
