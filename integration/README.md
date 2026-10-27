@@ -60,7 +60,18 @@ python -m krops_vari.main --photo dji_10.jpg --plot-id P01 --plots plots.json \
 uvicorn krops_vari.api:app --host 127.0.0.1 --port 8000
 ```
 
-That is all a photo-only scan needs. The plot file is optional: add it only for the weather features.
+The server starts on its own: no environment variables and no plot file are needed. Every setting below is optional.
+
+| Variable | Default | What it is for |
+|---|---|---|
+| `KROPS_PLOTS` | `weather/plots.json` (a missing file is fine) | plot locations, for the weather features |
+| `KROPS_DATA_DIR` | `integration/data/` (gitignored) | uploads, results and the weather cache |
+| `KROPS_SETTINGS` | none: the notebook's values | a JSON file overriding `Settings` |
+| `KROPS_NO_WEATHERKIT` | unset | `1` = NASA POWER only (no forecast) |
+
+WeatherKit keys are read from `weather/.env`; without them, the weather features use NASA POWER only.
+
+A photo-only scan needs none of these. The plot file only adds the weather features:
 
 | A scan with | Needs the plot file | Adds |
 |---|---|---|
