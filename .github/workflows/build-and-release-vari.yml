@@ -1,0 +1,95 @@
+name: Build & Package VariEngine (macOS arm64)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Release Tag Name (e.g. v0.1.0)'
+        required: true
+        default: 'v0.1.0'
+      draft:
+        description: 'Publish as Draft Release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-release:
+    name: Build & Package VariEngine
+    runs-on: macos-14 # Apple Silicon M1 runner
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Determine Version Tag
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.version_tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "TAG=$TAG" >> $GITHUB_OUTPUT
+          echo "Target Release Tag: $TAG"
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build Isolated Runtime Prefix
+        run: |
+          mkdir -p .build/prefix
+          python3.11 -m venv .build/prefix
+          .build/prefix/bin/python -m pip install --upgrade pip
+          .build/prefix/bin/pip install ./integration
+
+      - name: Package VariEngine Distribution
+        run: |
+          python3 Scripts/prepare-vari-engine.py \
+            --runtime .build/prefix \
+            --package-src integration/krops_vari \
+            --model-path segmentation/final_flow_ut1/yolo26m-krops-v0.1.mlpackage \
+            --weather-src weather \
+            --version "${{ steps.vars.outputs.TAG }}" \
+            --commit "${{ github.sha }}" \
+            --output .build/dist
+
+      - name: Compress & Checksum Archive
+        run: |
+          cd .build/dist
+          tar -czf ../../VariEngine-macOS-arm64.tar.gz VariEngine VariPython
+          cd ../..
+          shasum -a 256 VariEngine-macOS-arm64.tar.gz > VariEngine-macOS-arm64.tar.gz.sha256
+          echo "Archive Size: $(du -sh VariEngine-macOS-arm64.tar.gz | awk '{print $1}')"
+          echo "SHA256: $(cat VariEngine-macOS-arm64.tar.gz.sha256)"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.vars.outputs.TAG }}
+          name: "VariEngine macOS arm64 ${{ steps.vars.outputs.TAG }}"
+          body: |
+            ## VariEngine Standalone Runtime for macOS Apple Silicon
+            - **Release Version**: `${{ steps.vars.outputs.TAG }}`
+            - **Git Commit SHA**: `${{ github.sha }}`
+            - **Architecture**: `macOS arm64` (Apple Silicon M1/M2/M3/M4)
+            - **Deployment Target**: `macOS 14.0+`
+            - **SHA-256 Checksum**: `$(cat VariEngine-macOS-arm64.tar.gz.sha256 | awk '{print $1}')`
+          draft: ${{ github.event.inputs.draft || false }}
+          prerelease: false
+          files: |
+            VariEngine-macOS-arm64.tar.gz
+            VariEngine-macOS-arm64.tar.gz.sha256
