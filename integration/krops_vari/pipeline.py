@@ -23,7 +23,18 @@ from .vari import stats_for_box, vari_map
 from .zoning import group_trees_into_zones, zone_records
 
 SCHEMA_VERSION = 1
-TZ = ZoneInfo("Asia/Jakarta")
+import os
+
+if "PYTHONTZPATH" not in os.environ and Path("/usr/share/zoneinfo").is_dir():
+    os.environ["PYTHONTZPATH"] = "/usr/share/zoneinfo"
+
+try:
+    TZ = ZoneInfo("Asia/Jakarta")
+except Exception:
+    import zoneinfo
+    zoneinfo.reset_tzpath(to=["/usr/share/zoneinfo"])
+    TZ = ZoneInfo("Asia/Jakarta")
+
 log = logging.getLogger("krops_vari.pipeline")
 
 
