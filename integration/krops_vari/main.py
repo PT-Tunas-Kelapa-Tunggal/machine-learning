@@ -48,6 +48,17 @@ def main(argv=None):
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     settings = Settings.from_json(args.settings) if args.settings else Settings()
+
+    if args.check:
+        if not Path(settings.model_path).exists():
+            print(f"Error: Core ML model not found at {settings.model_path}", file=sys.stderr)
+            return 1
+        from .detection import Detector
+
+        _ = Detector(settings.model_path)
+        print("VARI engine siap")
+        return 0
+
     if bool(args.flight_start) != bool(args.flight_end):
         raise SystemExit("give both --flight-start and --flight-end, or neither")
     flight = {"flight_start": args.flight_start, "flight_end": args.flight_end} if args.flight_start else None

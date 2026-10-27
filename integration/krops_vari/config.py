@@ -7,12 +7,25 @@ can run side by side (the API does). Override a value with `Settings(...)`, `dat
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-DEFAULT_MODEL_PATH = REPO / "segmentation" / "final_flow_ut1" / "yolo26m-krops-v0.1.mlpackage"
 
+
+def _resolve_model_path() -> Path:
+    if env_path := os.getenv("KROPS_MODEL_PATH"):
+        return Path(env_path)
+    # Check bundled location: <VariEngine>/models/yolo26m-krops-v0.1.mlpackage
+    bundled = Path(__file__).resolve().parent.parent / "models" / "yolo26m-krops-v0.1.mlpackage"
+    if bundled.exists():
+        return bundled
+    # Check development repo location
+    return REPO / "segmentation" / "final_flow_ut1" / "yolo26m-krops-v0.1.mlpackage"
+
+
+DEFAULT_MODEL_PATH = _resolve_model_path()
 MG_PER_MGO = 24.305 / 40.304
 
 
