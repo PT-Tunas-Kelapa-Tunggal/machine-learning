@@ -54,8 +54,11 @@ def read_photo(photo):
     return photo
 
 
-def analyse_photo(image_bgr, settings, detector, flight_confidence=None):
-    """Stages 1–5 and the zone confidence, boost and product mass. Returns (zone_json, products, run_flags, counts)."""
+def analyse_photo(image_bgr, settings, detector, flight_confidence=None, flight_result=None):
+    """Stages 1–5 and the zone confidence, boost and product mass. Returns (zone_json, products, run_flags, counts).
+
+    flight_confidence is multiplied in; flight_result (the L6 result) raises the flight gate flag when low or
+    incomplete."""
     height, width = image_bgr.shape[:2]
     exg_mask, segmented_bgr = segment_vegetation_exg(image_bgr)
     trees, skipped = detector.detect(cv2.cvtColor(segmented_bgr, cv2.COLOR_BGR2RGB), settings)
@@ -63,7 +66,8 @@ def analyse_photo(image_bgr, settings, detector, flight_confidence=None):
     for tree in trees:
         tree["vari"] = stats_for_box(vmap, exg_mask, tree["bbox"])
     zone_json = zone_records(group_trees_into_zones(trees, settings, width, height), vmap, exg_mask, width, height)
-    computed, reference_ids, run_flags = zone_confidence(zone_json, trees, (width, height), settings, flight_confidence)
+    computed, reference_ids, run_flags = zone_confidence(zone_json, trees, (width, height), settings, flight_confidence,
+                                                         flight_result)
     confidence_by_id = settings.zone_confidence_by_id or computed
     if settings.zone_confidence_by_id:
         run_flags.append("zone confidence from settings.zone_confidence_by_id, not computed")
@@ -117,7 +121,8 @@ def run_scan(photo, settings=None, *, detector=None, scan_id=None, plot=None, fl
     flight_confidence = (flight_result["confidence"]
                          if flight_result is not None and settings.use_flight_confidence else None)
 
-    zone_json, products, photo_flags, counts = analyse_photo(read_photo(photo), settings, detector, flight_confidence)
+    zone_json, products, photo_flags, counts = analyse_photo(read_photo(photo), settings, detector, flight_confidence,
+                                                             flight_result)
     run_flags += photo_flags
     if not zone_json:
         run_flags.append("no trees detected: no zones, no boost")
