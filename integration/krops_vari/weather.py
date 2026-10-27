@@ -21,7 +21,17 @@ import requests
 
 from .config import REPO
 
-WEATHER_DIR = Path(os.getenv("KROPS_WEATHER_DIR", REPO / "weather"))
+
+def _resolve_weather_dir() -> Path:
+    if env_dir := os.getenv("KROPS_WEATHER_DIR"):
+        return Path(env_dir)
+    bundled = Path(__file__).resolve().parent.parent / "weather"
+    if bundled.exists():
+        return bundled
+    return REPO / "weather"
+
+
+WEATHER_DIR = _resolve_weather_dir()
 if str(WEATHER_DIR) not in sys.path:
     sys.path.insert(0, str(WEATHER_DIR))
 
