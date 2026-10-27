@@ -22,7 +22,8 @@ DEFAULT_CACHE = REPO / "integration" / "data" / "weather_cache"
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--photo", type=Path, required=True, help="the drone photo (RGB JPEG/PNG)")
+    parser.add_argument("--photo", type=Path, help="the drone photo or orthomosaic (RGB JPEG/PNG/TIFF)")
+    parser.add_argument("--check", action="store_true", help="perform engine self-check and exit")
     parser.add_argument("--out", type=Path, help="where to write the result JSON (default: print it)")
     parser.add_argument("--settings", type=Path, help="JSON object overriding Settings defaults")
     parser.add_argument("--scan-id", help="an id to carry into the result")
@@ -33,7 +34,10 @@ def parse_args(argv):
     parser.add_argument("--flight-end", help="landing, UTC ISO")
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE, help="climate cache per NASA POWER cell")
     parser.add_argument("--no-weatherkit", action="store_true", help="NASA POWER only (P30 fallback, no forecast)")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if not args.check and not args.photo:
+        parser.error("--photo is required unless --check is specified")
+    return args
 
 
 def find_plot(plots_path, plot_id):
