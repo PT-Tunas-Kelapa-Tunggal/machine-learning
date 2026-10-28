@@ -62,6 +62,42 @@ class Api(unittest.TestCase):
         self.assertEqual(self.post({"plot_id": "known", "flight_start": "2026-10-26T03:00:00",
                                     "flight_end": "2026-10-26T03:20:00"}).status_code, 422)  # no time zone
         self.assertEqual(self.client.get("/scans/never-made").status_code, 404)
+        self.assertEqual(self.post({"plot_id": "known", "rounds_per_year": "5"}).status_code, 422)  # not whole months
+        self.assertEqual(self.post({"plot_id": "known", "rounds_per_year": "two"}).status_code, 422)
+        self.assertEqual(self.post({"rounds_per_year": "3"}).status_code, 422)  # no plot: nothing to shape
+
+
+class NoWeather:
+    """A weather client that fails at once: the scan still finishes, without a plan, and makes no network call."""
+
+    def climate(self, lat, lon, today):
+        raise ConnectionError("no network in tests")
+
+
+@unittest.skipUnless(sys.platform == "darwin", "Core ML runs on macOS only")
+class ApiRoundsPerYear(unittest.TestCase):
+    def test_the_scan_runs_with_the_users_rounds(self):
+        try:
+            from fastapi.testclient import TestClient
+        except ImportError:
+            raise unittest.SkipTest("fastapi is not installed (pip install -e 'integration[api]')")
+        from krops_vari.api import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            plots = Path(tmp) / "plots.json"
+            plots.write_text(json.dumps([{"plot_id": "known", "lat": 0.0, "lon": 0.0}]))
+            with TestClient(create_app(Settings(), data_dir=tmp, plots_path=plots, weather=NoWeather())) as client:
+                with open(PHOTO, "rb") as f:
+                    reply = client.post("/scans", files={"photo": ("dji_10.jpg", f, "image/jpeg")},
+                                        data={"plot_id": "known", "rounds_per_year": "3", "scan_id": "rounds-3"})
+                self.assertEqual(reply.status_code, 202, reply.text)
+                for _ in range(120):
+                    body = client.get("/scans/rounds-3").json()
+                    if body["status"] in ("done", "failed"):
+                        break
+                    time.sleep(0.5)
+                self.assertEqual(body["status"], "done", body)
+                self.assertEqual(body["result"]["settings"]["rounds_per_year"], 3)
 
 
 if __name__ == "__main__":

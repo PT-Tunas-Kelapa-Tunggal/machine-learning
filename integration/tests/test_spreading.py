@@ -81,5 +81,42 @@ class Plan(unittest.TestCase):
         self.assertTrue(plan["flags"])
 
 
+class RoundsPerYear(unittest.TestCase):
+    """The user picks the rounds a year; the months are 12 ÷ rounds apart and the dose per round is annual ÷ rounds."""
+
+    def test_three_rounds_four_months_apart(self):
+        s = Settings(rounds_per_year=3)
+        self.assertEqual(s.round_gap_months, 4)
+        months, sets = round_months(stage_a(closed=(12,), shares={2: 0.9, 6: 0.9, 10: 0.9}), s)
+        self.assertEqual(months, (2, 6, 10))
+        self.assertTrue(all(len(m) == 3 for m, _ in sets))
+        self.assertNotIn((4, 8, 12), [m for m, _ in sets])  # December is closed
+
+    def test_dose_per_round_and_the_calendar_follow_the_rounds(self):
+        plan = spreading_plan(PRODUCTS, stage_a(closed=()), l8(), None, TODAY, Settings(rounds_per_year=4))
+        kies = next(r for r in plan["this_round"] if r["product"] == "kieserite_Mg_expensive")
+        self.assertAlmostEqual(kies["kg_per_zone"], 2.0 / 4)
+        self.assertEqual(len(plan["calendar"]["round_months"]), 4)
+        self.assertEqual((plan["rounds_per_year"], plan["round_gap_months"]), (4, 3))
+
+    def test_one_and_six_rounds(self):
+        self.assertEqual(round_months(stage_a(closed=(), shares={7: 0.9}), Settings(rounds_per_year=1))[0], (7,))
+        self.assertEqual(round_months(stage_a(closed=()), Settings(rounds_per_year=6))[0], (1, 3, 5, 7, 9, 11))
+
+    def test_too_few_open_months_is_flagged(self):
+        plan = spreading_plan(PRODUCTS, stage_a(closed=(1, 5, 9, 2, 6, 10, 3, 7, 11)), l8(), None, TODAY,
+                              Settings(rounds_per_year=3))  # only Apr, Aug and Dec open: exactly one set
+        self.assertEqual(plan["calendar"]["round_months"], ["Apr", "Aug", "Dec"])
+        plan = spreading_plan(PRODUCTS, stage_a(closed=(1, 5, 9, 2, 6, 10, 3, 7, 11, 12)), l8(), None, TODAY,
+                              Settings(rounds_per_year=3))
+        self.assertIsNone(plan["calendar"]["round_months"])
+        self.assertIn("no 3 open month(s) 4 months apart", plan["flags"][0])
+
+    def test_only_whole_month_gaps_are_allowed(self):
+        for bad in (0, 5, 7, 12, True, "3"):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                Settings(rounds_per_year=bad)
+
+
 if __name__ == "__main__":
     unittest.main()

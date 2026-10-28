@@ -22,7 +22,7 @@ from .spreading import spreading_plan
 from .vari import stats_for_box, vari_map
 from .zoning import group_trees_into_zones, zone_records
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # 2: the rounds a year are the user's pick; calendar "open_pairs" → "open_sets"
 TZ = ZoneInfo("Asia/Jakarta")
 log = logging.getLogger("krops_vari.pipeline")
 

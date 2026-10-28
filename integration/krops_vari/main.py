@@ -12,9 +12,10 @@ import argparse
 import json
 import logging
 import sys
+from dataclasses import replace
 from pathlib import Path
 
-from .config import REPO, Settings
+from .config import ALLOWED_ROUNDS_PER_YEAR, REPO, Settings
 from .pipeline import run_scan
 
 DEFAULT_CACHE = REPO / "integration" / "data" / "weather_cache"
@@ -31,6 +32,8 @@ def parse_args(argv):
                         help="JSON list of {plot_id, lat, lon} (default weather/plots.json)")
     parser.add_argument("--flight-start", help="take-off, UTC ISO (e.g. 2026-10-26T02:40:00Z); adds L6")
     parser.add_argument("--flight-end", help="landing, UTC ISO")
+    parser.add_argument("--rounds-per-year", type=int, choices=ALLOWED_ROUNDS_PER_YEAR,
+                        help="spreading rounds a year (default 2, or the --settings value); needs --plot-id")
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE, help="climate cache per NASA POWER cell")
     parser.add_argument("--no-weatherkit", action="store_true", help="NASA POWER only (P30 fallback, no forecast)")
     return parser.parse_args(argv)
@@ -48,6 +51,10 @@ def main(argv=None):
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     settings = Settings.from_json(args.settings) if args.settings else Settings()
+    if args.rounds_per_year is not None:
+        if not args.plot_id:
+            raise SystemExit("--rounds-per-year needs --plot-id (it shapes the spreading plan)")
+        settings = replace(settings, rounds_per_year=args.rounds_per_year)
     if bool(args.flight_start) != bool(args.flight_end):
         raise SystemExit("give both --flight-start and --flight-end, or neither")
     flight = {"flight_start": args.flight_start, "flight_end": args.flight_end} if args.flight_start else None

@@ -3,9 +3,10 @@
 - This round: the annual dose ÷ rounds_per_year. Mg on the first safe day of L8's window; N on the first safe day at
   least min_days_mg_to_n[Mg product] later (14 after dolomite, 1 after kieserite), else "not before" that date.
 - Wait instead of dates when L8 says tunda, cek or cek_hujan, or L5 says water_stress.
-- The year: two open months round_gap_months apart, the pair with the highest in-band (100–200 mm) share.
+- The year: rounds_per_year open months, 12 ÷ rounds apart (the user picks the rounds: 1, 2, 3, 4 or 6), the set
+  with the highest in-band (100–200 mm) share.
 
-Rounds, the round months and the kieserite gap are GUESSes; the 14 days after dolomite is practice, not a PPKS/MPOB
+The default 2 rounds, the round months and the kieserite gap are GUESSes; the 14 days after dolomite is practice, not a PPKS/MPOB
 number. Pure functions: no network.
 """
 from datetime import timedelta
@@ -69,14 +70,17 @@ def this_round(products, safe_days, wait, settings):
 
 
 def round_months(stage_a, settings):
-    """(chosen pair of months, every open pair with its combined in-band share), months 1–12; (None, []) if none."""
-    gap = settings.round_gap_months
-    pairs = sorted({tuple(sorted((m, (m + gap - 1) % 12 + 1))) for m in range(1, 13)})
-    open_pairs = [(p, sum(stage_a[m]["in_band_share"] for m in p)) for p in pairs
-                  if all(stage_a.get(m, {}).get("gate") == "open" for m in p)]
-    if not open_pairs:
+    """(chosen months, every open set with its combined in-band share), months 1–12; (None, []) if none.
+
+    A set is one month per round, round_gap_months apart: with 3 rounds e.g. (1, 5, 9). Every month in it must be open.
+    """
+    gap, rounds = settings.round_gap_months, settings.rounds_per_year
+    sets = sorted({tuple(sorted((m - 1 + k * gap) % 12 + 1 for k in range(rounds))) for m in range(1, 13)})
+    open_sets = [(s, sum(stage_a[m]["in_band_share"] for m in s)) for s in sets
+                 if all(stage_a.get(m, {}).get("gate") == "open" for m in s)]
+    if not open_sets:
         return None, []
-    return max(open_pairs, key=lambda item: item[1])[0], open_pairs
+    return max(open_sets, key=lambda item: item[1])[0], open_sets
 
 
 def round_totals(products, settings):
@@ -92,8 +96,9 @@ def spreading_plan(products, stage_a, l8, p30, today, settings):
     """The plan: L5 and L8 as read, this round per zone, and the yearly calendar."""
     wait = wait_reason(l8, p30, today)
     safe_days = l8["dates"]
-    chosen, open_pairs = round_months(stage_a, settings)
-    flags = [] if chosen else [f"no two open months {settings.round_gap_months} months apart: the calendar needs a decision"]
+    chosen, open_sets = round_months(stage_a, settings)
+    flags = [] if chosen else [f"no {settings.rounds_per_year} open month(s) {settings.round_gap_months} months apart: "
+                               "the calendar needs a decision"]
     return {
         "today": today.isoformat(),
         "l5": p30,
@@ -102,12 +107,13 @@ def spreading_plan(products, stage_a, l8, p30, today, settings):
                "removed": {k: [d.isoformat() for d in v] for k, v in (l8["removed"] or {}).items()}},
         "wait": wait,
         "rounds_per_year": settings.rounds_per_year,
+        "round_gap_months": settings.round_gap_months,
         "min_days_mg_to_n": settings.min_days_mg_to_n,
         "this_round": this_round(products, safe_days, wait, settings),
         "per_round_totals_kg": round_totals(products, settings),
         "calendar": {
             "round_months": [MONTHS[m - 1] for m in chosen] if chosen else None,
-            "open_pairs": [{"months": [MONTHS[m - 1] for m in p], "in_band_share": round(s, 3)} for p, s in open_pairs],
+            "open_sets": [{"months": [MONTHS[m - 1] for m in p], "in_band_share": round(s, 3)} for p, s in open_sets],
             "note": "climate averages (1991–2020); the dates come from running the plan in that month",
         },
         "flags": flags,

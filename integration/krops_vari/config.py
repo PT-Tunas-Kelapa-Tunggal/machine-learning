@@ -15,6 +15,10 @@ DEFAULT_MODEL_PATH = REPO / "segmentation" / "final_flow_ut1" / "yolo26m-krops-v
 
 MG_PER_MGO = 24.305 / 40.304
 
+# Rounds a year the user may pick: whole months apart (12 ÷ rounds), so not 5. 6 rounds = 2 months apart, the floor
+# a 2011 planter guide sets between two rounds of the same fertilizer.
+ALLOWED_ROUNDS_PER_YEAR = (1, 2, 3, 4, 6)
+
 
 @dataclass
 class Settings:
@@ -63,15 +67,24 @@ class Settings:
     use_flight_confidence: bool = True         # multiply in L6 when it was computed (team decision)
 
     # ---- spreading plan (weather_fertilizer.ipynb)
-    rounds_per_year: int = 2                   # GUESS – no source yet
-    round_gap_months: int = 6                  # GUESS – no source yet
+    rounds_per_year: int = 2                   # default a GUESS; the user may pick any of ALLOWED_ROUNDS_PER_YEAR
     # Days from spreading Mg to spreading N. Dolomite is a lime: higher pH near its particles raises NH3 loss from
     # urea/ammonium; practice is ≥ 2 weeks (14–28 days), no PPKS/MPOB number. Kieserite: 1 = a different day (GUESS).
     min_days_mg_to_n: dict = field(default_factory=lambda: {"dolomite_Mg_cheaper": 14, "kieserite_Mg_expensive": 1})
 
+    def __post_init__(self):
+        if isinstance(self.rounds_per_year, bool) or self.rounds_per_year not in ALLOWED_ROUNDS_PER_YEAR:
+            raise ValueError(f"rounds_per_year must be one of {', '.join(map(str, ALLOWED_ROUNDS_PER_YEAR))}, "
+                             f"not {self.rounds_per_year!r}")
+
     @property
     def trees_per_zone(self):
         return self.zone_grid_rows * self.zone_grid_cols
+
+    @property
+    def round_gap_months(self):
+        """Months between rounds: the year split evenly (2 rounds → 6, 3 → 4, 4 → 3)."""
+        return 12 // self.rounds_per_year
 
     @classmethod
     def from_json(cls, path):

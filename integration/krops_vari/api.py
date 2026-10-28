@@ -2,8 +2,8 @@
 
     uvicorn krops_vari.api:app --host 0.0.0.0 --port 8000      (macOS: Core ML)
 
-    POST /scans         multipart: photo (file); plot_id, flight_start, flight_end, scan_id (optional fields)
-                        → 202 {"scan_id", "status": "queued"}
+    POST /scans         multipart: photo (file); plot_id, flight_start, flight_end, rounds_per_year, scan_id
+                        (optional fields) → 202 {"scan_id", "status": "queued"}
     GET  /scans/{id}    → {"scan_id", "status": queued | running | done | failed, "result" when done}
     GET  /health
 
@@ -20,6 +20,7 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -27,7 +28,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from . import __version__
-from .config import REPO, Settings
+from .config import ALLOWED_ROUNDS_PER_YEAR, REPO, Settings
 from .pipeline import run_scan
 
 log = logging.getLogger("krops_vari.api")
@@ -80,10 +81,10 @@ def create_app(settings=None, data_dir=None, plots_path=None, detector=None, wea
         with jobs_lock:
             jobs[scan_id] = jobs.get(scan_id, {}) | fields
 
-    def work(scan_id, photo_path, plot, flight):
+    def work(scan_id, photo_path, plot, flight, scan_settings):
         set_status(scan_id, status="running")
         try:
-            result = run_scan(photo_path, settings, detector=state["detector"], scan_id=scan_id, plot=plot,
+            result = run_scan(photo_path, scan_settings, detector=state["detector"], scan_id=scan_id, plot=plot,
                               flight=flight, weather=weather_client() if plot else None)
             (scans_dir / scan_id / "result.json").write_text(json.dumps(result, ensure_ascii=False))
             set_status(scan_id, status="done")
@@ -98,7 +99,7 @@ def create_app(settings=None, data_dir=None, plots_path=None, detector=None, wea
     @app.post("/scans", status_code=202)
     async def create_scan(photo: UploadFile = File(...), plot_id: str | None = Form(None),
                           flight_start: str | None = Form(None), flight_end: str | None = Form(None),
-                          scan_id: str | None = Form(None)):
+                          rounds_per_year: int | None = Form(None), scan_id: str | None = Form(None)):
         scan_id = scan_id or uuid.uuid4().hex
         if not SCAN_ID.match(scan_id):
             raise HTTPException(422, "scan_id: 1–64 letters, digits, - or _")
@@ -117,6 +118,14 @@ def create_app(settings=None, data_dir=None, plots_path=None, detector=None, wea
                 raise HTTPException(404, f"unknown plot_id {plot_id}")
         elif flight:
             raise HTTPException(422, "flight times need a plot_id (the weather is looked up for the plot)")
+        scan_settings = settings
+        if rounds_per_year is not None:
+            if rounds_per_year not in ALLOWED_ROUNDS_PER_YEAR:
+                raise HTTPException(422, "rounds_per_year must be one of "
+                                         f"{', '.join(map(str, ALLOWED_ROUNDS_PER_YEAR))}")
+            if not plot:
+                raise HTTPException(422, "rounds_per_year needs a plot_id (it shapes the spreading plan)")
+            scan_settings = replace(settings, rounds_per_year=rounds_per_year)
         folder = scans_dir / scan_id
         with jobs_lock:
             if scan_id in jobs or folder.exists():
@@ -125,7 +134,7 @@ def create_app(settings=None, data_dir=None, plots_path=None, detector=None, wea
         folder.mkdir(parents=True)
         photo_path = folder / f"photo{suffix}"
         photo_path.write_bytes(await photo.read())
-        executor.submit(work, scan_id, photo_path, plot, flight)
+        executor.submit(work, scan_id, photo_path, plot, flight, scan_settings)
         return {"scan_id": scan_id, "status": "queued"}
 
     @app.get("/scans/{scan_id}")

@@ -50,7 +50,30 @@ python -m krops_vari.main --photo ../segmentation/final_flow_ut1/dji_10.jpg --ou
 # with the plot's weather: the spreading plan; with flight times also the L6 flight confidence
 python -m krops_vari.main --photo dji_10.jpg --plot-id P01 --plots plots.json \
     --flight-start 2026-10-26T03:00:00Z --flight-end 2026-10-26T03:20:00Z --out result.json
+
+# 3 spreading rounds a year instead of 2
+python -m krops_vari.main --photo dji_10.jpg --plot-id P01 --plots plots.json --rounds-per-year 3 --out result.json
 ```
+
+## Rounds a year
+
+The user picks how many times a year the fertilizer is spread: 1, 2 (the default), 3, 4 or 6. Each round gets the
+annual dose ÷ rounds, and the calendar picks one open month per round, 12 ÷ rounds months apart:
+
+| Rounds | Months apart | Each round gets | Calendar example |
+|---|---|---|---|
+| 1 | — | the whole year's dose | Mar |
+| 2 | 6 | ½ | Mar, Sep |
+| 3 | 4 | ⅓ | Feb, Jun, Oct |
+| 4 | 3 | ¼ | Jan, Apr, Jul, Oct |
+| 6 | 2 | ⅙ | Jan, Mar, May, Jul, Sep, Nov |
+
+5 isn't offered: the rounds wouldn't be whole months apart. 6 rounds is 2 months apart, the floor a planter guide
+sets between two rounds of the same fertilizer. If the plot has too few open months for the rounds asked, the
+calendar is empty and a flag says it needs a decision.
+
+Set it per scan (`rounds_per_year` in the API, `--rounds-per-year` on the command line, both need a plot), or for
+every scan in the `KROPS_SETTINGS` / `--settings` JSON: `{"rounds_per_year": 3}`.
 
 `plots.json` is a list of `{plot_id, lat, lon}` and stays on the server. The result never contains coordinates.
 
@@ -92,7 +115,7 @@ so new plots need no restart. Use `--host 0.0.0.0` only on a trusted network: th
 
 | Request | Answer |
 |---|---|
-| `POST /scans` (multipart: `photo`; optional `plot_id`, `flight_start`, `flight_end`, `scan_id`) | `202 {"scan_id", "status": "queued"}` |
+| `POST /scans` (multipart: `photo`; optional `plot_id`, `flight_start`, `flight_end`, `rounds_per_year`, `scan_id`) | `202 {"scan_id", "status": "queued"}` |
 | `GET /scans/{scan_id}` | `{"status": queued / running / done / failed, "result"}` |
 | `GET /health` | `{"status", "version", "model_loaded"}` |
 
@@ -107,7 +130,7 @@ Scans run in the background, one at a time, with the model loaded once at startu
 | `summary` | reference zones, P25, P95, boost mode |
 | `product_mass` | kg of each product per zone and per palm, per year |
 | `flight_confidence` | the L6 result when flight times and a plot were given, else `null` |
-| `spreading` | L5 P30, L8 state and safe days, this round per zone and product, the yearly calendar; `null` without a plot |
+| `spreading` | L5 P30, L8 state and safe days, the rounds a year, this round per zone and product, the yearly calendar (`round_months`, `open_sets`); `null` without a plot |
 | `run_flags` | what may make the result less accurate, including any weather source that failed |
 
 ## Tests
