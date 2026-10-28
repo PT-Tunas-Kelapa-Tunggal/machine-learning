@@ -1,0 +1,2145 @@
+{
+  "metadata": {
+    "source_image": "webodm_new_2nd_flight.jpeg",
+    "image_width_px": 1950,
+    "image_height_px": 1664,
+    "exg_method": "ExG = 2G - R - B; min-max normalized; Otsu threshold; 3x3 opening/closing",
+    "vari_formula": "(G - R) / (G + R - B)",
+    "vari_distribution_plot": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_vari_distribution.png",
+    "white_separator_zone_annotation_image": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zones_white_separators.jpg",
+    "zone_boost_formula": "Bi=max(0, 1-V_input/Vref)*confidence; Vref=P95 of valid zone means; if P95-P25 gap <= configured cutoff, V_input=P25 for every zone, otherwise V_input=each zone mean",
+    "zone_specific_boost_formula": "B_zone=max(0, 1-zone_mean_vari/Vref)*zone_confidence; shown for comparison even when P25 blanket mode is applied",
+    "p25_zone_mean_vari": 0.2013017013669014,
+    "p95_p25_vari_gap": 0.04010132700204849,
+    "minimum_p95_p25_gap_for_blanket_boost": 0.03,
+    "zone_boost_mode": "zone_specific",
+    "zone_mean_vari_percentile_rank_definition": "100 × number of valid zone means less than or equal to this zone mean ÷ number of valid zones; empirical rank within this image only",
+    "fertilizer_boost_formula": "Mg_i=Bi*Mg_max; N_i=Bi*N_max; annual zone nutrient kg=annual nutrient kg/ha*zone area ha",
+    "reference_zone_mean_vari": 0.2414030283689499,
+    "zone_confidence_default": 0.6,
+    "max_nutrient_targets_kg_ha_per_year": {
+      "Mg": 22.0,
+      "N": 145.0
+    },
+    "fertilizer_nutrient_by_product": {
+      "kieserite_Mg_expensive": "Mg",
+      "dolomite_Mg_cheaper": "Mg",
+      "ZA_N_cheaper": "N",
+      "urea_N_expensive": "N"
+    },
+    "fertilizer_product_nutrient_fractions": {
+      "kieserite_Mg_expensive": 0.15377567983326718,
+      "dolomite_Mg_cheaper": 0.13266921397379913,
+      "ZA_N_cheaper": 0.21,
+      "urea_N_expensive": 0.46
+    },
+    "fertilizer_prices_per_kg": {},
+    "ground_area_source": "user-supplied mapping/uniform area when provided; otherwise estimated as detected tree count × 10 m × 10 m, not from image pixels",
+    "vari_pixel_filter": "Only finite VARI pixels with non-zero denominator inside ExG mask are included",
+    "model_path": "krops_model_v0.2.mlpackage",
+    "confidence_threshold": 0.1,
+    "maximum_tree_dimension_multiplier": 4.0,
+    "maximum_tree_area_multiplier": 20.0,
+    "nms_iou_threshold": 0.45,
+    "trees_per_zone_max": 9,
+    "minimum_trees_to_keep_zone": 2,
+    "zone_grouping": "Approximate image-row clustering; columns use fixed spatial bins based on median within-row tree spacing so missing detections do not shift subsequent bins; zone bbox encloses detected member boxes only",
+    "row_tolerance_multiplier": 0.75,
+    "detected_tree_count": 47,
+    "zone_count": 6,
+    "coordinate_system": "Pixel coordinates use origin (0,0) at top-left; bbox x1,y1 inclusive-ish and x2,y2 exclusive crop boundary. normalized_xyxy values are divided by original image width/height.",
+    "limitations": [
+      "ExG is a heuristic vegetation mask and may include weeds or omit shaded palm leaves.",
+      "Zone rectangles are generated from spatial grouping of detected trees; they are not guaranteed to match actual plantation blocks or planting rows.",
+      "Zone VARI summarizes ExG-selected pixels in the union of member tree detection boxes; pixels in overlapping boxes are counted once.",
+      "The optional P25 blanket-boost mode is a configurable spatial rule, not an agronomic diagnosis; validate its VARI gap cutoff for the imagery and management plan.",
+      "VARI is an RGB vegetation index, not a direct diagnosis of palm health or fertilizer requirement.",
+      "Fertilizer rates and prices are illustrative/configurable and are not agronomic recommendations.",
+      "Reported fertilizer boosts and totals are elemental Mg or N quantities; they are not converted to product mass.",
+      "Ground zone areas are not derived from image pixels. If measured areas are not supplied, fertilizer quantities use an approximate 10 m palm spacing (0.01 ha per detected palm); actual zone area may differ."
+    ]
+  },
+  "zones": [
+    {
+      "zone_id": 1,
+      "approx_row": 1,
+      "tree_count": 7,
+      "bbox": {
+        "x1": 36,
+        "y1": 114,
+        "x2": 808,
+        "y2": 900,
+        "width": 772,
+        "height": 786,
+        "normalized_xyxy": [
+          0.018461538461538463,
+          0.06850961538461539,
+          0.41435897435897434,
+          0.5408653846153846
+        ]
+      },
+      "vari": {
+        "vegetation_pixel_count": 160076,
+        "mean_vari": 0.2043479084968567,
+        "median_vari": 0.1944444477558136,
+        "std_vari": 0.11043073236942291,
+        "mad_vari": 0.0649801641702652,
+        "min_vari": -0.18285714089870453,
+        "max_vari": 1.0
+      },
+      "trees": [
+        {
+          "tree_id": 26,
+          "confidence": 0.423583984375,
+          "bbox": {
+            "x1": 67,
+            "y1": 160,
+            "x2": 333,
+            "y2": 352,
+            "width": 266,
+            "height": 192,
+            "normalized_xyxy": [
+              0.03435897435897436,
+              0.09615384615384616,
+              0.17076923076923076,
+              0.21153846153846154
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 20413,
+            "mean_vari": 0.17363423109054565,
+            "median_vari": 0.16080401837825775,
+            "std_vari": 0.11311690509319305,
+            "mad_vari": 0.07577000558376312,
+            "min_vari": -0.09389671683311462,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 33,
+          "confidence": 0.29248046875,
+          "bbox": {
+            "x1": 102,
+            "y1": 320,
+            "x2": 318,
+            "y2": 504,
+            "width": 216,
+            "height": 184,
+            "normalized_xyxy": [
+              0.052307692307692305,
+              0.19230769230769232,
+              0.16307692307692306,
+              0.30288461538461536
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 20017,
+            "mean_vari": 0.15647968649864197,
+            "median_vari": 0.15614618360996246,
+            "std_vari": 0.08812031149864197,
+            "mad_vari": 0.059238433837890625,
+            "min_vari": -0.09442060440778732,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 46,
+          "confidence": 0.142578125,
+          "bbox": {
+            "x1": 294,
+            "y1": 145,
+            "x2": 506,
+            "y2": 356,
+            "width": 212,
+            "height": 211,
+            "normalized_xyxy": [
+              0.15076923076923077,
+              0.08713942307692307,
+              0.2594871794871795,
+              0.21394230769230768
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 26461,
+            "mean_vari": 0.1993296891450882,
+            "median_vari": 0.1827957034111023,
+            "std_vari": 0.12543731927871704,
+            "mad_vari": 0.08036220073699951,
+            "min_vari": -0.18285714089870453,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 44,
+          "confidence": 0.1705322265625,
+          "bbox": {
+            "x1": 485,
+            "y1": 185,
+            "x2": 711,
+            "y2": 394,
+            "width": 226,
+            "height": 209,
+            "normalized_xyxy": [
+              0.24871794871794872,
+              0.11117788461538461,
+              0.3646153846153846,
+              0.23677884615384615
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 31847,
+            "mean_vari": 0.19808785617351532,
+            "median_vari": 0.18942731618881226,
+            "std_vari": 0.09646198898553848,
+            "mad_vari": 0.05474717915058136,
+            "min_vari": -0.0903225839138031,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 21,
+          "confidence": 0.470703125,
+          "bbox": {
+            "x1": 487,
+            "y1": 334,
+            "x2": 712,
+            "y2": 527,
+            "width": 225,
+            "height": 193,
+            "normalized_xyxy": [
+              0.24974358974358973,
+              0.20072115384615385,
+              0.36512820512820515,
+              0.3167067307692308
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 24070,
+            "mean_vari": 0.21103203296661377,
+            "median_vari": 0.20408163964748383,
+            "std_vari": 0.0960661917924881,
+            "mad_vari": 0.05322830379009247,
+            "min_vari": -0.0903225839138031,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 5,
+          "confidence": 0.685546875,
+          "bbox": {
+            "x1": 490,
+            "y1": 473,
+            "x2": 762,
+            "y2": 714,
+            "width": 272,
+            "height": 241,
+            "normalized_xyxy": [
+              0.2512820512820513,
+              0.2842548076923077,
+              0.39076923076923076,
+              0.42908653846153844
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 37049,
+            "mean_vari": 0.22466851770877838,
+            "median_vari": 0.21176470816135406,
+            "std_vari": 0.10445946455001831,
+            "mad_vari": 0.058235302567481995,
+            "min_vari": -0.03896103799343109,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 6,
+          "confidence": 0.67529296875,
+          "bbox": {
+            "x1": 535,
+            "y1": 662,
+            "x2": 777,
+            "y2": 869,
+            "width": 242,
+            "height": 207,
+            "normalized_xyxy": [
+              0.2743589743589744,
+              0.39783653846153844,
+              0.3984615384615385,
+              0.5222355769230769
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 24430,
+            "mean_vari": 0.20641641318798065,
+            "median_vari": 0.18934911489486694,
+            "std_vari": 0.12164421379566193,
+            "mad_vari": 0.07083059847354889,
+            "min_vari": -0.0397351011633873,
+            "max_vari": 1.0
+          }
+        }
+      ],
+      "recommendation": {
+        "reference_zone_mean_vari": 0.2414030283689499,
+        "reference_zone_mean_vari_percentile": 95,
+        "p25_zone_mean_vari": 0.2013017013669014,
+        "p95_p25_vari_gap": 0.04010132700204849,
+        "zone_mean_vari_percentile_rank": 50.0,
+        "blanket_vari_gap_cutoff": 0.03,
+        "boost_mode": "zone_specific",
+        "boost_vari_input": 0.2043479084968567,
+        "zone_confidence": 0.6,
+        "zone_specific_vari_deficit_fraction": 0.15349898517204918,
+        "zone_specific_boost_fraction": 0.09209939110322951,
+        "vari_deficit_fraction": 0.15349898517204918,
+        "boost_fraction": 0.09209939110322951,
+        "zone_area_ha": 0.07,
+        "fertilizers": {
+          "kieserite_Mg_expensive": {
+            "base_rate_kg_ha_per_year": 22.0,
+            "boost_added_rate_kg_ha_per_year": 2.0261866042710492,
+            "boosted_rate_kg_ha_per_year": 2.0261866042710492,
+            "recommended_nutrient": "Mg",
+            "recommended_nutrient_kg_ha_per_year": 2.0261866042710492,
+            "annual_total_kg": 0.14183306229897347,
+            "kg_per_palm_per_year": 0.020261866042710495,
+            "mg_kg_ha_per_year": 2.0261866042710492,
+            "mg_total_kg_per_year": 0.14183306229897347
+          },
+          "dolomite_Mg_cheaper": {
+            "base_rate_kg_ha_per_year": 22.0,
+            "boost_added_rate_kg_ha_per_year": 2.0261866042710492,
+            "boosted_rate_kg_ha_per_year": 2.0261866042710492,
+            "recommended_nutrient": "Mg",
+            "recommended_nutrient_kg_ha_per_year": 2.0261866042710492,
+            "annual_total_kg": 0.14183306229897347,
+            "kg_per_palm_per_year": 0.020261866042710495,
+            "mg_kg_ha_per_year": 2.0261866042710492,
+            "mg_total_kg_per_year": 0.14183306229897347
+          },
+          "ZA_N_cheaper": {
+            "base_rate_kg_ha_per_year": 145.0,
+            "boost_added_rate_kg_ha_per_year": 13.354411709968279,
+            "boosted_rate_kg_ha_per_year": 13.354411709968279,
+            "recommended_nutrient": "N",
+            "recommended_nutrient_kg_ha_per_year": 13.354411709968279,
+            "annual_total_kg": 0.9348088196977796,
+            "kg_per_palm_per_year": 0.1335441170996828,
+            "n_kg_ha_per_year": 13.354411709968279,
+            "n_total_kg_per_year": 0.9348088196977796
+          },
+          "urea_N_expensive": {
+            "base_rate_kg_ha_per_year": 145.0,
+            "boost_added_rate_kg_ha_per_year": 13.354411709968279,
+            "boosted_rate_kg_ha_per_year": 13.354411709968279,
+            "recommended_nutrient": "N",
+            "recommended_nutrient_kg_ha_per_year": 13.354411709968279,
+            "annual_total_kg": 0.9348088196977796,
+            "kg_per_palm_per_year": 0.1335441170996828,
+            "n_kg_ha_per_year": 13.354411709968279,
+            "n_total_kg_per_year": 0.9348088196977796
+          }
+        },
+        "area_note": "Approximate area from detected tree count × spacing²; default spacing is 10 m (midpoint of 9–11 m). Replace with measured zone areas when available."
+      },
+      "base_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_base_crops/zone_01.jpg",
+      "exg_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_exg_crops/zone_01.jpg"
+    },
+    {
+      "zone_id": 2,
+      "approx_row": 1,
+      "tree_count": 9,
+      "bbox": {
+        "x1": 622,
+        "y1": 9,
+        "x2": 1139,
+        "y2": 918,
+        "width": 517,
+        "height": 909,
+        "normalized_xyxy": [
+          0.318974358974359,
+          0.005408653846153846,
+          0.5841025641025641,
+          0.5516826923076923
+        ]
+      },
+      "vari": {
+        "vegetation_pixel_count": 172729,
+        "mean_vari": 0.2296794056892395,
+        "median_vari": 0.21764706075191498,
+        "std_vari": 0.12448650598526001,
+        "mad_vari": 0.0712418407201767,
+        "min_vari": -0.09693877398967743,
+        "max_vari": 1.6818181276321411
+      },
+      "trees": [
+        {
+          "tree_id": 11,
+          "confidence": 0.59716796875,
+          "bbox": {
+            "x1": 653,
+            "y1": 198,
+            "x2": 874,
+            "y2": 396,
+            "width": 221,
+            "height": 198,
+            "normalized_xyxy": [
+              0.33487179487179486,
+              0.11899038461538461,
+              0.4482051282051282,
+              0.23798076923076922
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 23504,
+            "mean_vari": 0.23563893139362335,
+            "median_vari": 0.2222222238779068,
+            "std_vari": 0.11600431054830551,
+            "mad_vari": 0.0668613463640213,
+            "min_vari": -0.09693877398967743,
+            "max_vari": 1.0833333730697632
+          }
+        },
+        {
+          "tree_id": 19,
+          "confidence": 0.50146484375,
+          "bbox": {
+            "x1": 804,
+            "y1": 40,
+            "x2": 1069,
+            "y2": 274,
+            "width": 265,
+            "height": 234,
+            "normalized_xyxy": [
+              0.4123076923076923,
+              0.02403846153846154,
+              0.5482051282051282,
+              0.16466346153846154
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 31080,
+            "mean_vari": 0.2544881999492645,
+            "median_vari": 0.23595505952835083,
+            "std_vari": 0.13445726037025452,
+            "mad_vari": 0.06938844919204712,
+            "min_vari": -0.09693877398967743,
+            "max_vari": 1.6818181276321411
+          }
+        },
+        {
+          "tree_id": 29,
+          "confidence": 0.37353515625,
+          "bbox": {
+            "x1": 825,
+            "y1": 197,
+            "x2": 1072,
+            "y2": 397,
+            "width": 247,
+            "height": 200,
+            "normalized_xyxy": [
+              0.4230769230769231,
+              0.11838942307692307,
+              0.5497435897435897,
+              0.23858173076923078
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 23487,
+            "mean_vari": 0.22791655361652374,
+            "median_vari": 0.2152777761220932,
+            "std_vari": 0.12006082385778427,
+            "mad_vari": 0.06662912666797638,
+            "min_vari": -0.09693877398967743,
+            "max_vari": 1.1891891956329346
+          }
+        },
+        {
+          "tree_id": 15,
+          "confidence": 0.5390625,
+          "bbox": {
+            "x1": 668,
+            "y1": 357,
+            "x2": 892,
+            "y2": 554,
+            "width": 224,
+            "height": 197,
+            "normalized_xyxy": [
+              0.3425641025641026,
+              0.21454326923076922,
+              0.4574358974358974,
+              0.3329326923076923
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 21808,
+            "mean_vari": 0.2195804864168167,
+            "median_vari": 0.20915032923221588,
+            "std_vari": 0.10617563873529434,
+            "mad_vari": 0.05870680510997772,
+            "min_vari": -0.0258620698004961,
+            "max_vari": 1.0714285373687744
+          }
+        },
+        {
+          "tree_id": 23,
+          "confidence": 0.447265625,
+          "bbox": {
+            "x1": 854,
+            "y1": 359,
+            "x2": 1095,
+            "y2": 566,
+            "width": 241,
+            "height": 207,
+            "normalized_xyxy": [
+              0.4379487179487179,
+              0.21574519230769232,
+              0.5615384615384615,
+              0.3401442307692308
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 21408,
+            "mean_vari": 0.19046270847320557,
+            "median_vari": 0.17499999701976776,
+            "std_vari": 0.1209266409277916,
+            "mad_vari": 0.07499999552965164,
+            "min_vari": -0.05701754242181778,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 36,
+          "confidence": 0.265869140625,
+          "bbox": {
+            "x1": 677,
+            "y1": 517,
+            "x2": 900,
+            "y2": 722,
+            "width": 223,
+            "height": 205,
+            "normalized_xyxy": [
+              0.34717948717948716,
+              0.31069711538461536,
+              0.46153846153846156,
+              0.4338942307692308
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 23844,
+            "mean_vari": 0.18829266726970673,
+            "median_vari": 0.17307692766189575,
+            "std_vari": 0.11081340909004211,
+            "mad_vari": 0.06692306697368622,
+            "min_vari": -0.0476190485060215,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 42,
+          "confidence": 0.2021484375,
+          "bbox": {
+            "x1": 719,
+            "y1": 669,
+            "x2": 931,
+            "y2": 868,
+            "width": 212,
+            "height": 199,
+            "normalized_xyxy": [
+              0.3687179487179487,
+              0.4020432692307692,
+              0.4774358974358974,
+              0.5216346153846154
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 20090,
+            "mean_vari": 0.18454432487487793,
+            "median_vari": 0.17299577593803406,
+            "std_vari": 0.10585096478462219,
+            "mad_vari": 0.06439848989248276,
+            "min_vari": -0.05213269963860512,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 16,
+          "confidence": 0.5283203125,
+          "bbox": {
+            "x1": 870,
+            "y1": 518,
+            "x2": 1100,
+            "y2": 725,
+            "width": 230,
+            "height": 207,
+            "normalized_xyxy": [
+              0.4461538461538462,
+              0.3112980769230769,
+              0.5641025641025641,
+              0.43569711538461536
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 20540,
+            "mean_vari": 0.23546956479549408,
+            "median_vari": 0.2291666716337204,
+            "std_vari": 0.127027228474617,
+            "mad_vari": 0.07879073917865753,
+            "min_vari": -0.0476190485060215,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 25,
+          "confidence": 0.440673828125,
+          "bbox": {
+            "x1": 878,
+            "y1": 675,
+            "x2": 1108,
+            "y2": 887,
+            "width": 230,
+            "height": 212,
+            "normalized_xyxy": [
+              0.4502564102564103,
+              0.40564903846153844,
+              0.5682051282051283,
+              0.5330528846153846
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 23634,
+            "mean_vari": 0.235061913728714,
+            "median_vari": 0.22085890173912048,
+            "std_vari": 0.13171698153018951,
+            "mad_vari": 0.07380007207393646,
+            "min_vari": -0.05445544421672821,
+            "max_vari": 1.25
+          }
+        }
+      ],
+      "recommendation": {
+        "reference_zone_mean_vari": 0.2414030283689499,
+        "reference_zone_mean_vari_percentile": 95,
+        "p25_zone_mean_vari": 0.2013017013669014,
+        "p95_p25_vari_gap": 0.04010132700204849,
+        "zone_mean_vari_percentile_rank": 83.33333333333333,
+        "blanket_vari_gap_cutoff": 0.03,
+        "boost_mode": "zone_specific",
+        "boost_vari_input": 0.2296794056892395,
+        "zone_confidence": 0.6,
+        "zone_specific_vari_deficit_fraction": 0.0485645219901405,
+        "zone_specific_boost_fraction": 0.029138713194084297,
+        "vari_deficit_fraction": 0.0485645219901405,
+        "boost_fraction": 0.029138713194084297,
+        "zone_area_ha": 0.09,
+        "fertilizers": {
+          "kieserite_Mg_expensive": {
+            "base_rate_kg_ha_per_year": 22.0,
+            "boost_added_rate_kg_ha_per_year": 0.6410516902698545,
+            "boosted_rate_kg_ha_per_year": 0.6410516902698545,
+            "recommended_nutrient": "Mg",
+            "recommended_nutrient_kg_ha_per_year": 0.6410516902698545,
+            "annual_total_kg": 0.057694652124286906,
+            "kg_per_palm_per_year": 0.006410516902698545,
+            "mg_kg_ha_per_year": 0.6410516902698545,
+            "mg_total_kg_per_year": 0.057694652124286906
+          },
+          "dolomite_Mg_cheaper": {
+            "base_rate_kg_ha_per_year": 22.0,
+            "boost_added_rate_kg_ha_per_year": 0.6410516902698545,
+            "boosted_rate_kg_ha_per_year": 0.6410516902698545,
+            "recommended_nutrient": "Mg",
+            "recommended_nutrient_kg_ha_per_year": 0.6410516902698545,
+            "annual_total_kg": 0.057694652124286906,
+            "kg_per_palm_per_year": 0.006410516902698545,
+            "mg_kg_ha_per_year": 0.6410516902698545,
+            "mg_total_kg_per_year": 0.057694652124286906
+          },
+          "ZA_N_cheaper": {
+            "base_rate_kg_ha_per_year": 145.0,
+            "boost_added_rate_kg_ha_per_year": 4.225113413142223,
+            "boosted_rate_kg_ha_per_year": 4.225113413142223,
+            "recommended_nutrient": "N",
+            "recommended_nutrient_kg_ha_per_year": 4.225113413142223,
+            "annual_total_kg": 0.38026020718280007,
+            "kg_per_palm_per_year": 0.04225113413142223,
+            "n_kg_ha_per_year": 4.225113413142223,
+            "n_total_kg_per_year": 0.38026020718280007
+          },
+          "urea_N_expensive": {
+            "base_rate_kg_ha_per_year": 145.0,
+            "boost_added_rate_kg_ha_per_year": 4.225113413142223,
+            "boosted_rate_kg_ha_per_year": 4.225113413142223,
+            "recommended_nutrient": "N",
+            "recommended_nutrient_kg_ha_per_year": 4.225113413142223,
+            "annual_total_kg": 0.38026020718280007,
+            "kg_per_palm_per_year": 0.04225113413142223,
+            "n_kg_ha_per_year": 4.225113413142223,
+            "n_total_kg_per_year": 0.38026020718280007
+          }
+        },
+        "area_note": "Approximate area from detected tree count × spacing²; default spacing is 10 m (midpoint of 9–11 m). Replace with measured zone areas when available."
+      },
+      "base_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_base_crops/zone_02.jpg",
+      "exg_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_exg_crops/zone_02.jpg"
+    },
+    {
+      "zone_id": 3,
+      "approx_row": 1,
+      "tree_count": 8,
+      "bbox": {
+        "x1": 1008,
+        "y1": 0,
+        "x2": 1866,
+        "y2": 939,
+        "width": 858,
+        "height": 939,
+        "normalized_xyxy": [
+          0.5169230769230769,
+          0.0,
+          0.9569230769230769,
+          0.5643028846153846
+        ]
+      },
+      "vari": {
+        "vegetation_pixel_count": 213742,
+        "mean_vari": 0.2218109667301178,
+        "median_vari": 0.21052631735801697,
+        "std_vari": 0.12301582098007202,
+        "mad_vari": 0.07518798112869263,
+        "min_vari": -0.11450381577014923,
+        "max_vari": 1.4482758045196533
+      },
+      "trees": [
+        {
+          "tree_id": 17,
+          "confidence": 0.51953125,
+          "bbox": {
+            "x1": 1175,
+            "y1": 170,
+            "x2": 1460,
+            "y2": 400,
+            "width": 285,
+            "height": 230,
+            "normalized_xyxy": [
+              0.6025641025641025,
+              0.10216346153846154,
+              0.7487179487179487,
+              0.2403846153846154
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 39362,
+            "mean_vari": 0.18555103242397308,
+            "median_vari": 0.15909090638160706,
+            "std_vari": 0.1258491426706314,
+            "mad_vari": 0.060517311096191406,
+            "min_vari": -0.1041666641831398,
+            "max_vari": 1.4482758045196533
+          }
+        },
+        {
+          "tree_id": 14,
+          "confidence": 0.5478515625,
+          "bbox": {
+            "x1": 1039,
+            "y1": 379,
+            "x2": 1257,
+            "y2": 570,
+            "width": 218,
+            "height": 191,
+            "normalized_xyxy": [
+              0.5328205128205128,
+              0.22776442307692307,
+              0.6446153846153846,
+              0.3425480769230769
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 16884,
+            "mean_vari": 0.18739499151706696,
+            "median_vari": 0.17469879984855652,
+            "std_vari": 0.11863306909799576,
+            "mad_vari": 0.08311370015144348,
+            "min_vari": -0.055776894092559814,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 2,
+          "confidence": 0.716796875,
+          "bbox": {
+            "x1": 1208,
+            "y1": 339,
+            "x2": 1475,
+            "y2": 584,
+            "width": 267,
+            "height": 245,
+            "normalized_xyxy": [
+              0.6194871794871795,
+              0.20372596153846154,
+              0.7564102564102564,
+              0.35096153846153844
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 36101,
+            "mean_vari": 0.18764141201972961,
+            "median_vari": 0.18309858441352844,
+            "std_vari": 0.11519889533519745,
+            "mad_vari": 0.07271537184715271,
+            "min_vari": -0.11450381577014923,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 38,
+          "confidence": 0.255859375,
+          "bbox": {
+            "x1": 1058,
+            "y1": 538,
+            "x2": 1272,
+            "y2": 735,
+            "width": 214,
+            "height": 197,
+            "normalized_xyxy": [
+              0.5425641025641026,
+              0.3233173076923077,
+              0.6523076923076923,
+              0.4417067307692308
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 19525,
+            "mean_vari": 0.2191527783870697,
+            "median_vari": 0.2083333283662796,
+            "std_vari": 0.10878419876098633,
+            "mad_vari": 0.05994623899459839,
+            "min_vari": -0.04591836780309677,
+            "max_vari": 1.03125
+          }
+        },
+        {
+          "tree_id": 28,
+          "confidence": 0.385986328125,
+          "bbox": {
+            "x1": 1062,
+            "y1": 695,
+            "x2": 1285,
+            "y2": 898,
+            "width": 223,
+            "height": 203,
+            "normalized_xyxy": [
+              0.5446153846153846,
+              0.4176682692307692,
+              0.658974358974359,
+              0.5396634615384616
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 25062,
+            "mean_vari": 0.22380013763904572,
+            "median_vari": 0.21118012070655823,
+            "std_vari": 0.11651547998189926,
+            "mad_vari": 0.06919372081756592,
+            "min_vari": -0.039647575467824936,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 4,
+          "confidence": 0.6943359375,
+          "bbox": {
+            "x1": 1237,
+            "y1": 539,
+            "x2": 1476,
+            "y2": 747,
+            "width": 239,
+            "height": 208,
+            "normalized_xyxy": [
+              0.6343589743589744,
+              0.3239182692307692,
+              0.7569230769230769,
+              0.4489182692307692
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 32284,
+            "mean_vari": 0.23372040688991547,
+            "median_vari": 0.23125000298023224,
+            "std_vari": 0.11711912602186203,
+            "mad_vari": 0.07444946467876434,
+            "min_vari": -0.07782100886106491,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 9,
+          "confidence": 0.63818359375,
+          "bbox": {
+            "x1": 1246,
+            "y1": 684,
+            "x2": 1501,
+            "y2": 908,
+            "width": 255,
+            "height": 224,
+            "normalized_xyxy": [
+              0.638974358974359,
+              0.4110576923076923,
+              0.7697435897435897,
+              0.5456730769230769
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 33261,
+            "mean_vari": 0.23719263076782227,
+            "median_vari": 0.2294372320175171,
+            "std_vari": 0.11852556467056274,
+            "mad_vari": 0.07090064883232117,
+            "min_vari": -0.09059233218431473,
+            "max_vari": 1.0909091234207153
+          }
+        },
+        {
+          "tree_id": 41,
+          "confidence": 0.2296142578125,
+          "bbox": {
+            "x1": 1456,
+            "y1": 0,
+            "x2": 1835,
+            "y2": 318,
+            "width": 379,
+            "height": 318,
+            "normalized_xyxy": [
+              0.7466666666666667,
+              0.0,
+              0.941025641025641,
+              0.19110576923076922
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 45851,
+            "mean_vari": 0.2602294981479645,
+            "median_vari": 0.246478870511055,
+            "std_vari": 0.11981998383998871,
+            "mad_vari": 0.07256582379341125,
+            "min_vari": -0.05325443670153618,
+            "max_vari": 1.162162184715271
+          }
+        }
+      ],
+      "recommendation": {
+        "reference_zone_mean_vari": 0.2414030283689499,
+        "reference_zone_mean_vari_percentile": 95,
+        "p25_zone_mean_vari": 0.2013017013669014,
+        "p95_p25_vari_gap": 0.04010132700204849,
+        "zone_mean_vari_percentile_rank": 66.66666666666667,
+        "blanket_vari_gap_cutoff": 0.03,
+        "boost_mode": "zone_specific",
+        "boost_vari_input": 0.2218109667301178,
+        "zone_confidence": 0.6,
+        "zone_specific_vari_deficit_fraction": 0.08115913777555617,
+        "zone_specific_boost_fraction": 0.048695482665333696,
+        "vari_deficit_fraction": 0.08115913777555617,
+        "boost_fraction": 0.048695482665333696,
+        "zone_area_ha": 0.08,
+        "fertilizers": {
+          "kieserite_Mg_expensive": {
+            "base_rate_kg_ha_per_year": 22.0,
+            "boost_added_rate_kg_ha_per_year": 1.0713006186373413,
+            "boosted_rate_kg_ha_per_year": 1.0713006186373413,
+            "recommended_nutrient": "Mg",
+            "recommended_nutrient_kg_ha_per_year": 1.0713006186373413,
+            "annual_total_kg": 0.0857040494909873,
+            "kg_per_palm_per_year": 0.010713006186373412,
+            "mg_kg_ha_per_year": 1.0713006186373413,
+            "mg_total_kg_per_year": 0.0857040494909873
+          },
+          "dolomite_Mg_cheaper": {
+            "base_rate_kg_ha_per_year": 22.0,
+            "boost_added_rate_kg_ha_per_year": 1.0713006186373413,
+            "boosted_rate_kg_ha_per_year": 1.0713006186373413,
+            "recommended_nutrient": "Mg",
+            "recommended_nutrient_kg_ha_per_year": 1.0713006186373413,
+            "annual_total_kg": 0.0857040494909873,
+            "kg_per_palm_per_year": 0.010713006186373412,
+            "mg_kg_ha_per_year": 1.0713006186373413,
+            "mg_total_kg_per_year": 0.0857040494909873
+          },
+          "ZA_N_cheaper": {
+            "base_rate_kg_ha_per_year": 145.0,
+            "boost_added_rate_kg_ha_per_year": 7.060844986473386,
+            "boosted_rate_kg_ha_per_year": 7.060844986473386,
+            "recommended_nutrient": "N",
+            "recommended_nutrient_kg_ha_per_year": 7.060844986473386,
+            "annual_total_kg": 0.5648675989178709,
+            "kg_per_palm_per_year": 0.07060844986473386,
+            "n_kg_ha_per_year": 7.060844986473386,
+            "n_total_kg_per_year": 0.5648675989178709
+          },
+          "urea_N_expensive": {
+            "base_rate_kg_ha_per_year": 145.0,
+            "boost_added_rate_kg_ha_per_year": 7.060844986473386,
+            "boosted_rate_kg_ha_per_year": 7.060844986473386,
+            "recommended_nutrient": "N",
+            "recommended_nutrient_kg_ha_per_year": 7.060844986473386,
+            "annual_total_kg": 0.5648675989178709,
+            "kg_per_palm_per_year": 0.07060844986473386,
+            "n_kg_ha_per_year": 7.060844986473386,
+            "n_total_kg_per_year": 0.5648675989178709
+          }
+        },
+        "area_note": "Approximate area from detected tree count × spacing²; default spacing is 10 m (midpoint of 9–11 m). Replace with measured zone areas when available."
+      },
+      "base_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_base_crops/zone_03.jpg",
+      "exg_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_exg_crops/zone_03.jpg"
+    },
+    {
+      "zone_id": 4,
+      "approx_row": 2,
+      "tree_count": 6,
+      "bbox": {
+        "x1": 180,
+        "y1": 806,
+        "x2": 804,
+        "y2": 1522,
+        "width": 624,
+        "height": 716,
+        "normalized_xyxy": [
+          0.09230769230769231,
+          0.484375,
+          0.4123076923076923,
+          0.9146634615384616
+        ]
+      },
+      "vari": {
+        "vegetation_pixel_count": 132809,
+        "mean_vari": 0.20028629899024963,
+        "median_vari": 0.19111111760139465,
+        "std_vari": 0.11534550040960312,
+        "mad_vari": 0.06956415623426437,
+        "min_vari": -0.10232558101415634,
+        "max_vari": 1.4210525751113892
+      },
+      "trees": [
+        {
+          "tree_id": 3,
+          "confidence": 0.71435546875,
+          "bbox": {
+            "x1": 211,
+            "y1": 1102,
+            "x2": 458,
+            "y2": 1324,
+            "width": 247,
+            "height": 222,
+            "normalized_xyxy": [
+              0.1082051282051282,
+              0.6622596153846154,
+              0.23487179487179488,
+              0.7956730769230769
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 29954,
+            "mean_vari": 0.25533124804496765,
+            "median_vari": 0.2397260218858719,
+            "std_vari": 0.11498582363128662,
+            "mad_vari": 0.06143145263195038,
+            "min_vari": -0.035175878554582596,
+            "max_vari": 1.4210525751113892
+          }
+        },
+        {
+          "tree_id": 1,
+          "confidence": 0.72412109375,
+          "bbox": {
+            "x1": 369,
+            "y1": 952,
+            "x2": 610,
+            "y2": 1171,
+            "width": 241,
+            "height": 219,
+            "normalized_xyxy": [
+              0.18923076923076923,
+              0.5721153846153846,
+              0.3128205128205128,
+              0.7037259615384616
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 32036,
+            "mean_vari": 0.20371784269809723,
+            "median_vari": 0.19298245012760162,
+            "std_vari": 0.10201101005077362,
+            "mad_vari": 0.06135280430316925,
+            "min_vari": -0.03932584449648857,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 45,
+          "confidence": 0.1636962890625,
+          "bbox": {
+            "x1": 404,
+            "y1": 1122,
+            "x2": 628,
+            "y2": 1320,
+            "width": 224,
+            "height": 198,
+            "normalized_xyxy": [
+              0.20717948717948717,
+              0.6742788461538461,
+              0.32205128205128203,
+              0.7932692307692307
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 24070,
+            "mean_vari": 0.21098250150680542,
+            "median_vari": 0.20134228467941284,
+            "std_vari": 0.11133405566215515,
+            "mad_vari": 0.06327477842569351,
+            "min_vari": -0.05119453743100166,
+            "max_vari": 1.2083333730697632
+          }
+        },
+        {
+          "tree_id": 47,
+          "confidence": 0.1219482421875,
+          "bbox": {
+            "x1": 546,
+            "y1": 837,
+            "x2": 773,
+            "y2": 1011,
+            "width": 227,
+            "height": 174,
+            "normalized_xyxy": [
+              0.28,
+              0.5030048076923077,
+              0.3964102564102564,
+              0.6075721153846154
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 19139,
+            "mean_vari": 0.16840575635433197,
+            "median_vari": 0.15656565129756927,
+            "std_vari": 0.09712512046098709,
+            "mad_vari": 0.059343427419662476,
+            "min_vari": -0.04494382068514824,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 22,
+          "confidence": 0.44775390625,
+          "bbox": {
+            "x1": 237,
+            "y1": 1290,
+            "x2": 464,
+            "y2": 1489,
+            "width": 227,
+            "height": 199,
+            "normalized_xyxy": [
+              0.12153846153846154,
+              0.7752403846153846,
+              0.23794871794871794,
+              0.8948317307692307
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 26003,
+            "mean_vari": 0.16601639986038208,
+            "median_vari": 0.1547619104385376,
+            "std_vari": 0.1032009944319725,
+            "mad_vari": 0.061934903264045715,
+            "min_vari": -0.10232558101415634,
+            "max_vari": 1.0625
+          }
+        },
+        {
+          "tree_id": 8,
+          "confidence": 0.65087890625,
+          "bbox": {
+            "x1": 418,
+            "y1": 1262,
+            "x2": 660,
+            "y2": 1491,
+            "width": 242,
+            "height": 229,
+            "normalized_xyxy": [
+              0.21435897435897436,
+              0.7584134615384616,
+              0.3384615384615385,
+              0.8960336538461539
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 25811,
+            "mean_vari": 0.15268827974796295,
+            "median_vari": 0.14220184087753296,
+            "std_vari": 0.11212839931249619,
+            "mad_vari": 0.07587531208992004,
+            "min_vari": -0.10232558101415634,
+            "max_vari": 1.0
+          }
+        }
+      ],
+      "recommendation": {
+        "reference_zone_mean_vari": 0.2414030283689499,
+        "reference_zone_mean_vari_percentile": 95,
+        "p25_zone_mean_vari": 0.2013017013669014,
+        "p95_p25_vari_gap": 0.04010132700204849,
+        "zone_mean_vari_percentile_rank": 33.333333333333336,
+        "blanket_vari_gap_cutoff": 0.03,
+        "boost_mode": "zone_specific",
+        "boost_vari_input": 0.20028629899024963,
+        "zone_confidence": 0.6,
+        "zone_specific_vari_deficit_fraction": 0.17032399989555735,
+        "zone_specific_boost_fraction": 0.10219439993733441,
+        "vari_deficit_fraction": 0.17032399989555735,
+        "boost_fraction": 0.10219439993733441,
+        "zone_area_ha": 0.06,
+        "fertilizers": {
+          "kieserite_Mg_expensive": {
+            "base_rate_kg_ha_per_year": 22.0,
+            "boost_added_rate_kg_ha_per_year": 2.248276798621357,
+            "boosted_rate_kg_ha_per_year": 2.248276798621357,
+            "recommended_nutrient": "Mg",
+            "recommended_nutrient_kg_ha_per_year": 2.248276798621357,
+            "annual_total_kg": 0.13489660791728142,
+            "kg_per_palm_per_year": 0.02248276798621357,
+            "mg_kg_ha_per_year": 2.248276798621357,
+            "mg_total_kg_per_year": 0.13489660791728142
+          },
+          "dolomite_Mg_cheaper": {
+            "base_rate_kg_ha_per_year": 22.0,
+            "boost_added_rate_kg_ha_per_year": 2.248276798621357,
+            "boosted_rate_kg_ha_per_year": 2.248276798621357,
+            "recommended_nutrient": "Mg",
+            "recommended_nutrient_kg_ha_per_year": 2.248276798621357,
+            "annual_total_kg": 0.13489660791728142,
+            "kg_per_palm_per_year": 0.02248276798621357,
+            "mg_kg_ha_per_year": 2.248276798621357,
+            "mg_total_kg_per_year": 0.13489660791728142
+          },
+          "ZA_N_cheaper": {
+            "base_rate_kg_ha_per_year": 145.0,
+            "boost_added_rate_kg_ha_per_year": 14.81818799091349,
+            "boosted_rate_kg_ha_per_year": 14.81818799091349,
+            "recommended_nutrient": "N",
+            "recommended_nutrient_kg_ha_per_year": 14.81818799091349,
+            "annual_total_kg": 0.8890912794548094,
+            "kg_per_palm_per_year": 0.1481818799091349,
+            "n_kg_ha_per_year": 14.81818799091349,
+            "n_total_kg_per_year": 0.8890912794548094
+          },
+          "urea_N_expensive": {
+            "base_rate_kg_ha_per_year": 145.0,
+            "boost_added_rate_kg_ha_per_year": 14.81818799091349,
+            "boosted_rate_kg_ha_per_year": 14.81818799091349,
+            "recommended_nutrient": "N",
+            "recommended_nutrient_kg_ha_per_year": 14.81818799091349,
+            "annual_total_kg": 0.8890912794548094,
+            "kg_per_palm_per_year": 0.1481818799091349,
+            "n_kg_ha_per_year": 14.81818799091349,
+            "n_total_kg_per_year": 0.8890912794548094
+          }
+        },
+        "area_note": "Approximate area from detected tree count × spacing²; default spacing is 10 m (midpoint of 9–11 m). Replace with measured zone areas when available."
+      },
+      "base_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_base_crops/zone_04.jpg",
+      "exg_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_exg_crops/zone_04.jpg"
+    },
+    {
+      "zone_id": 5,
+      "approx_row": 2,
+      "tree_count": 9,
+      "bbox": {
+        "x1": 534,
+        "y1": 793,
+        "x2": 1215,
+        "y2": 1664,
+        "width": 681,
+        "height": 871,
+        "normalized_xyxy": [
+          0.27384615384615385,
+          0.4765625,
+          0.6230769230769231,
+          1.0
+        ]
+      },
+      "vari": {
+        "vegetation_pixel_count": 161582,
+        "mean_vari": 0.18850137293338776,
+        "median_vari": 0.17610062658786774,
+        "std_vari": 0.11605682969093323,
+        "mad_vari": 0.07263033092021942,
+        "min_vari": -0.10526315867900848,
+        "max_vari": 1.7000000476837158
+      },
+      "trees": [
+        {
+          "tree_id": 7,
+          "confidence": 0.662109375,
+          "bbox": {
+            "x1": 565,
+            "y1": 973,
+            "x2": 789,
+            "y2": 1183,
+            "width": 224,
+            "height": 210,
+            "normalized_xyxy": [
+              0.28974358974358977,
+              0.5847355769230769,
+              0.4046153846153846,
+              0.7109375
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 23090,
+            "mean_vari": 0.17718984186649323,
+            "median_vari": 0.1666666716337204,
+            "std_vari": 0.08896984905004501,
+            "mad_vari": 0.053153157234191895,
+            "min_vari": -0.07253886014223099,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 20,
+          "confidence": 0.49853515625,
+          "bbox": {
+            "x1": 731,
+            "y1": 824,
+            "x2": 951,
+            "y2": 1023,
+            "width": 220,
+            "height": 199,
+            "normalized_xyxy": [
+              0.3748717948717949,
+              0.4951923076923077,
+              0.4876923076923077,
+              0.6147836538461539
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 20375,
+            "mean_vari": 0.1547383815050125,
+            "median_vari": 0.13636364042758942,
+            "std_vari": 0.10349301248788834,
+            "mad_vari": 0.06189555674791336,
+            "min_vari": -0.05445544421672821,
+            "max_vari": 1.0357142686843872
+          }
+        },
+        {
+          "tree_id": 34,
+          "confidence": 0.285400390625,
+          "bbox": {
+            "x1": 742,
+            "y1": 999,
+            "x2": 958,
+            "y2": 1183,
+            "width": 216,
+            "height": 184,
+            "normalized_xyxy": [
+              0.38051282051282054,
+              0.6003605769230769,
+              0.49128205128205127,
+              0.7109375
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 19355,
+            "mean_vari": 0.2165537029504776,
+            "median_vari": 0.21212121844291687,
+            "std_vari": 0.11528068035840988,
+            "mad_vari": 0.07399967312812805,
+            "min_vari": -0.08870967477560043,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 13,
+          "confidence": 0.55029296875,
+          "bbox": {
+            "x1": 925,
+            "y1": 991,
+            "x2": 1148,
+            "y2": 1198,
+            "width": 223,
+            "height": 207,
+            "normalized_xyxy": [
+              0.47435897435897434,
+              0.5955528846153846,
+              0.5887179487179487,
+              0.7199519230769231
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 22254,
+            "mean_vari": 0.16937436163425446,
+            "median_vari": 0.1592920422554016,
+            "std_vari": 0.12230002880096436,
+            "mad_vari": 0.07799123227596283,
+            "min_vari": -0.10526315867900848,
+            "max_vari": 1.7000000476837158
+          }
+        },
+        {
+          "tree_id": 40,
+          "confidence": 0.245361328125,
+          "bbox": {
+            "x1": 739,
+            "y1": 1132,
+            "x2": 980,
+            "y2": 1358,
+            "width": 241,
+            "height": 226,
+            "normalized_xyxy": [
+              0.378974358974359,
+              0.6802884615384616,
+              0.5025641025641026,
+              0.8161057692307693
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 20560,
+            "mean_vari": 0.20324978232383728,
+            "median_vari": 0.19379845261573792,
+            "std_vari": 0.09537813067436218,
+            "mad_vari": 0.06105509400367737,
+            "min_vari": -0.04566210135817528,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 43,
+          "confidence": 0.2003173828125,
+          "bbox": {
+            "x1": 938,
+            "y1": 1155,
+            "x2": 1171,
+            "y2": 1368,
+            "width": 233,
+            "height": 213,
+            "normalized_xyxy": [
+              0.48102564102564105,
+              0.6941105769230769,
+              0.6005128205128205,
+              0.8221153846153846
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 21395,
+            "mean_vari": 0.2026335746049881,
+            "median_vari": 0.1812080591917038,
+            "std_vari": 0.1318732649087906,
+            "mad_vari": 0.07521727681159973,
+            "min_vari": -0.08536585420370102,
+            "max_vari": 1.3333333730697632
+          }
+        },
+        {
+          "tree_id": 31,
+          "confidence": 0.3544921875,
+          "bbox": {
+            "x1": 954,
+            "y1": 1306,
+            "x2": 1184,
+            "y2": 1522,
+            "width": 230,
+            "height": 216,
+            "normalized_xyxy": [
+              0.48923076923076925,
+              0.7848557692307693,
+              0.6071794871794872,
+              0.9146634615384616
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 18654,
+            "mean_vari": 0.1284601241350174,
+            "median_vari": 0.11352531611919403,
+            "std_vari": 0.10020080208778381,
+            "mad_vari": 0.06294527649879456,
+            "min_vari": -0.09756097197532654,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 39,
+          "confidence": 0.254638671875,
+          "bbox": {
+            "x1": 614,
+            "y1": 1422,
+            "x2": 840,
+            "y2": 1646,
+            "width": 226,
+            "height": 224,
+            "normalized_xyxy": [
+              0.3148717948717949,
+              0.8545673076923077,
+              0.4307692307692308,
+              0.9891826923076923
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 16777,
+            "mean_vari": 0.21626819670200348,
+            "median_vari": 0.20987653732299805,
+            "std_vari": 0.13057668507099152,
+            "mad_vari": 0.09070555120706558,
+            "min_vari": -0.06688962876796722,
+            "max_vari": 1.0
+          }
+        },
+        {
+          "tree_id": 30,
+          "confidence": 0.369384765625,
+          "bbox": {
+            "x1": 798,
+            "y1": 1452,
+            "x2": 1022,
+            "y2": 1655,
+            "width": 224,
+            "height": 203,
+            "normalized_xyxy": [
+              0.40923076923076923,
+              0.8725961538461539,
+              0.5241025641025641,
+              0.9945913461538461
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 16882,
+            "mean_vari": 0.1926903873682022,
+            "median_vari": 0.1830357164144516,
+            "std_vari": 0.11675387620925903,
+            "mad_vari": 0.0735829770565033,
+            "min_vari": -0.056338027119636536,
+            "max_vari": 1.034482717514038
+          }
+        }
+      ],
+      "recommendation": {
+        "reference_zone_mean_vari": 0.2414030283689499,
+        "reference_zone_mean_vari_percentile": 95,
+        "p25_zone_mean_vari": 0.2013017013669014,
+        "p95_p25_vari_gap": 0.04010132700204849,
+        "zone_mean_vari_percentile_rank": 16.666666666666668,
+        "blanket_vari_gap_cutoff": 0.03,
+        "boost_mode": "zone_specific",
+        "boost_vari_input": 0.18850137293338776,
+        "zone_confidence": 0.6,
+        "zone_specific_vari_deficit_fraction": 0.21914246806676152,
+        "zone_specific_boost_fraction": 0.1314854808400569,
+        "vari_deficit_fraction": 0.21914246806676152,
+        "boost_fraction": 0.1314854808400569,
+        "zone_area_ha": 0.09,
+        "fertilizers": {
+          "kieserite_Mg_expensive": {
+            "base_rate_kg_ha_per_year": 22.0,
+            "boost_added_rate_kg_ha_per_year": 2.8926805784812517,
+            "boosted_rate_kg_ha_per_year": 2.8926805784812517,
+            "recommended_nutrient": "Mg",
+            "recommended_nutrient_kg_ha_per_year": 2.8926805784812517,
+            "annual_total_kg": 0.26034125206331266,
+            "kg_per_palm_per_year": 0.028926805784812517,
+            "mg_kg_ha_per_year": 2.8926805784812517,
+            "mg_total_kg_per_year": 0.26034125206331266
+          },
+          "dolomite_Mg_cheaper": {
+            "base_rate_kg_ha_per_year": 22.0,
+            "boost_added_rate_kg_ha_per_year": 2.8926805784812517,
+            "boosted_rate_kg_ha_per_year": 2.8926805784812517,
+            "recommended_nutrient": "Mg",
+            "recommended_nutrient_kg_ha_per_year": 2.8926805784812517,
+            "annual_total_kg": 0.26034125206331266,
+            "kg_per_palm_per_year": 0.028926805784812517,
+            "mg_kg_ha_per_year": 2.8926805784812517,
+            "mg_total_kg_per_year": 0.26034125206331266
+          },
+          "ZA_N_cheaper": {
+            "base_rate_kg_ha_per_year": 145.0,
+            "boost_added_rate_kg_ha_per_year": 19.06539472180825,
+            "boosted_rate_kg_ha_per_year": 19.06539472180825,
+            "recommended_nutrient": "N",
+            "recommended_nutrient_kg_ha_per_year": 19.06539472180825,
+            "annual_total_kg": 1.7158855249627425,
+            "kg_per_palm_per_year": 0.1906539472180825,
+            "n_kg_ha_per_year": 19.06539472180825,
+            "n_total_kg_per_year": 1.7158855249627425
+          },
+          "urea_N_expensive": {
+            "base_rate_kg_ha_per_year": 145.0,
+            "boost_added_rate_kg_ha_per_year": 19.06539472180825,
+            "boosted_rate_kg_ha_per_year": 19.06539472180825,
+            "recommended_nutrient": "N",
+            "recommended_nutrient_kg_ha_per_year": 19.06539472180825,
+            "annual_total_kg": 1.7158855249627425,
+            "kg_per_palm_per_year": 0.1906539472180825,
+            "n_kg_ha_per_year": 19.06539472180825,
+            "n_total_kg_per_year": 1.7158855249627425
+          }
+        },
+        "area_note": "Approximate area from detected tree count × spacing²; default spacing is 10 m (midpoint of 9–11 m). Replace with measured zone areas when available."
+      },
+      "base_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_base_crops/zone_05.jpg",
+      "exg_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_exg_crops/zone_05.jpg"
+    },
+    {
+      "zone_id": 6,
+      "approx_row": 2,
+      "tree_count": 8,
+      "bbox": {
+        "x1": 1036,
+        "y1": 822,
+        "x2": 1620,
+        "y2": 1600,
+        "width": 584,
+        "height": 778,
+        "normalized_xyxy": [
+          0.5312820512820513,
+          0.49399038461538464,
+          0.8307692307692308,
+          0.9615384615384616
+        ]
+      },
+      "vari": {
+        "vegetation_pixel_count": 154669,
+        "mean_vari": 0.24531090259552002,
+        "median_vari": 0.23125000298023224,
+        "std_vari": 0.1391468048095703,
+        "mad_vari": 0.08555464446544647,
+        "min_vari": -0.1267605572938919,
+        "max_vari": 1.2692307233810425
+      },
+      "trees": [
+        {
+          "tree_id": 24,
+          "confidence": 0.441650390625,
+          "bbox": {
+            "x1": 1067,
+            "y1": 853,
+            "x2": 1303,
+            "y2": 1062,
+            "width": 236,
+            "height": 209,
+            "normalized_xyxy": [
+              0.5471794871794872,
+              0.5126201923076923,
+              0.6682051282051282,
+              0.6382211538461539
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 20275,
+            "mean_vari": 0.24550439417362213,
+            "median_vari": 0.2304147481918335,
+            "std_vari": 0.14305460453033447,
+            "mad_vari": 0.09132438898086548,
+            "min_vari": -0.049751244485378265,
+            "max_vari": 1.0499999523162842
+          }
+        },
+        {
+          "tree_id": 12,
+          "confidence": 0.572265625,
+          "bbox": {
+            "x1": 1118,
+            "y1": 1012,
+            "x2": 1343,
+            "y2": 1212,
+            "width": 225,
+            "height": 200,
+            "normalized_xyxy": [
+              0.5733333333333334,
+              0.6081730769230769,
+              0.6887179487179487,
+              0.7283653846153846
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 19888,
+            "mean_vari": 0.202947199344635,
+            "median_vari": 0.17877094447612762,
+            "std_vari": 0.1341390609741211,
+            "mad_vari": 0.07766763120889664,
+            "min_vari": -0.10526315867900848,
+            "max_vari": 1.149999976158142
+          }
+        },
+        {
+          "tree_id": 10,
+          "confidence": 0.62841796875,
+          "bbox": {
+            "x1": 1264,
+            "y1": 863,
+            "x2": 1508,
+            "y2": 1066,
+            "width": 244,
+            "height": 203,
+            "normalized_xyxy": [
+              0.6482051282051282,
+              0.5186298076923077,
+              0.7733333333333333,
+              0.640625
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 24271,
+            "mean_vari": 0.24476419389247894,
+            "median_vari": 0.2321428507566452,
+            "std_vari": 0.12667977809906006,
+            "mad_vari": 0.0768633484840393,
+            "min_vari": -0.049242425709962845,
+            "max_vari": 1.1081081628799438
+          }
+        },
+        {
+          "tree_id": 27,
+          "confidence": 0.407470703125,
+          "bbox": {
+            "x1": 1307,
+            "y1": 1030,
+            "x2": 1531,
+            "y2": 1232,
+            "width": 224,
+            "height": 202,
+            "normalized_xyxy": [
+              0.6702564102564103,
+              0.6189903846153846,
+              0.7851282051282051,
+              0.7403846153846154
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 22485,
+            "mean_vari": 0.24745036661624908,
+            "median_vari": 0.23711340129375458,
+            "std_vari": 0.13156385719776154,
+            "mad_vari": 0.08285808563232422,
+            "min_vari": -0.06513410061597824,
+            "max_vari": 1.1666666269302368
+          }
+        },
+        {
+          "tree_id": 35,
+          "confidence": 0.27685546875,
+          "bbox": {
+            "x1": 1137,
+            "y1": 1170,
+            "x2": 1349,
+            "y2": 1361,
+            "width": 212,
+            "height": 191,
+            "normalized_xyxy": [
+              0.583076923076923,
+              0.703125,
+              0.6917948717948718,
+              0.8179086538461539
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 16981,
+            "mean_vari": 0.2469267100095749,
+            "median_vari": 0.23376622796058655,
+            "std_vari": 0.1433449685573578,
+            "mad_vari": 0.09090909361839294,
+            "min_vari": -0.03875968977808952,
+            "max_vari": 1.1320754289627075
+          }
+        },
+        {
+          "tree_id": 37,
+          "confidence": 0.26025390625,
+          "bbox": {
+            "x1": 1155,
+            "y1": 1318,
+            "x2": 1377,
+            "y2": 1524,
+            "width": 222,
+            "height": 206,
+            "normalized_xyxy": [
+              0.5923076923076923,
+              0.7920673076923077,
+              0.7061538461538461,
+              0.9158653846153846
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 27039,
+            "mean_vari": 0.2123412936925888,
+            "median_vari": 0.20000000298023224,
+            "std_vari": 0.12531635165214539,
+            "mad_vari": 0.07848100364208221,
+            "min_vari": -0.06875000149011612,
+            "max_vari": 1.03125
+          }
+        },
+        {
+          "tree_id": 32,
+          "confidence": 0.352783203125,
+          "bbox": {
+            "x1": 1309,
+            "y1": 1188,
+            "x2": 1539,
+            "y2": 1400,
+            "width": 230,
+            "height": 212,
+            "normalized_xyxy": [
+              0.6712820512820513,
+              0.7139423076923077,
+              0.7892307692307692,
+              0.8413461538461539
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 24252,
+            "mean_vari": 0.23943543434143066,
+            "median_vari": 0.22033898532390594,
+            "std_vari": 0.14277026057243347,
+            "mad_vari": 0.08288682997226715,
+            "min_vari": -0.10000000149011612,
+            "max_vari": 1.2692307233810425
+          }
+        },
+        {
+          "tree_id": 18,
+          "confidence": 0.509765625,
+          "bbox": {
+            "x1": 1313,
+            "y1": 1320,
+            "x2": 1589,
+            "y2": 1569,
+            "width": 276,
+            "height": 249,
+            "normalized_xyxy": [
+              0.6733333333333333,
+              0.7932692307692307,
+              0.8148717948717948,
+              0.9429086538461539
+            ]
+          },
+          "vari": {
+            "vegetation_pixel_count": 31418,
+            "mean_vari": 0.23423351347446442,
+            "median_vari": 0.21710526943206787,
+            "std_vari": 0.1390341967344284,
+            "mad_vari": 0.08257612586021423,
+            "min_vari": -0.1267605572938919,
+            "max_vari": 1.2692307233810425
+          }
+        }
+      ],
+      "recommendation": {
+        "reference_zone_mean_vari": 0.2414030283689499,
+        "reference_zone_mean_vari_percentile": 95,
+        "p25_zone_mean_vari": 0.2013017013669014,
+        "p95_p25_vari_gap": 0.04010132700204849,
+        "zone_mean_vari_percentile_rank": 100.0,
+        "blanket_vari_gap_cutoff": 0.03,
+        "boost_mode": "zone_specific",
+        "boost_vari_input": 0.24531090259552002,
+        "zone_confidence": 0.6,
+        "zone_specific_vari_deficit_fraction": 0.0,
+        "zone_specific_boost_fraction": 0.0,
+        "vari_deficit_fraction": 0.0,
+        "boost_fraction": 0.0,
+        "zone_area_ha": 0.08,
+        "fertilizers": {
+          "kieserite_Mg_expensive": {
+            "base_rate_kg_ha_per_year": 22.0,
+            "boost_added_rate_kg_ha_per_year": 0.0,
+            "boosted_rate_kg_ha_per_year": 0.0,
+            "recommended_nutrient": "Mg",
+            "recommended_nutrient_kg_ha_per_year": 0.0,
+            "annual_total_kg": 0.0,
+            "kg_per_palm_per_year": 0.0,
+            "mg_kg_ha_per_year": 0.0,
+            "mg_total_kg_per_year": 0.0
+          },
+          "dolomite_Mg_cheaper": {
+            "base_rate_kg_ha_per_year": 22.0,
+            "boost_added_rate_kg_ha_per_year": 0.0,
+            "boosted_rate_kg_ha_per_year": 0.0,
+            "recommended_nutrient": "Mg",
+            "recommended_nutrient_kg_ha_per_year": 0.0,
+            "annual_total_kg": 0.0,
+            "kg_per_palm_per_year": 0.0,
+            "mg_kg_ha_per_year": 0.0,
+            "mg_total_kg_per_year": 0.0
+          },
+          "ZA_N_cheaper": {
+            "base_rate_kg_ha_per_year": 145.0,
+            "boost_added_rate_kg_ha_per_year": 0.0,
+            "boosted_rate_kg_ha_per_year": 0.0,
+            "recommended_nutrient": "N",
+            "recommended_nutrient_kg_ha_per_year": 0.0,
+            "annual_total_kg": 0.0,
+            "kg_per_palm_per_year": 0.0,
+            "n_kg_ha_per_year": 0.0,
+            "n_total_kg_per_year": 0.0
+          },
+          "urea_N_expensive": {
+            "base_rate_kg_ha_per_year": 145.0,
+            "boost_added_rate_kg_ha_per_year": 0.0,
+            "boosted_rate_kg_ha_per_year": 0.0,
+            "recommended_nutrient": "N",
+            "recommended_nutrient_kg_ha_per_year": 0.0,
+            "annual_total_kg": 0.0,
+            "kg_per_palm_per_year": 0.0,
+            "n_kg_ha_per_year": 0.0,
+            "n_total_kg_per_year": 0.0
+          }
+        },
+        "area_note": "Approximate area from detected tree count × spacing²; default spacing is 10 m (midpoint of 9–11 m). Replace with measured zone areas when available."
+      },
+      "base_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_base_crops/zone_06.jpg",
+      "exg_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_exg_crops/zone_06.jpg"
+    }
+  ],
+  "fertilizer_product_mass_conversions": [
+    {
+      "zone_id": 1,
+      "product": "kieserite_Mg_expensive",
+      "nutrient": "Mg",
+      "elemental_nutrient_kg_per_zone_per_year": 0.14183306229897347,
+      "label_nutrient_fraction": 0.15377567983326718,
+      "tree_count": 7,
+      "product_kg_per_zone_per_year": 0.9223374102638167,
+      "product_kg_per_palm_per_year": 0.13176248718054523
+    },
+    {
+      "zone_id": 1,
+      "product": "dolomite_Mg_cheaper",
+      "nutrient": "Mg",
+      "elemental_nutrient_kg_per_zone_per_year": 0.14183306229897347,
+      "label_nutrient_fraction": 0.13266921397379913,
+      "tree_count": 7,
+      "product_kg_per_zone_per_year": 1.069072907351242,
+      "product_kg_per_palm_per_year": 0.1527247010501774
+    },
+    {
+      "zone_id": 1,
+      "product": "ZA_N_cheaper",
+      "nutrient": "N",
+      "elemental_nutrient_kg_per_zone_per_year": 0.9348088196977796,
+      "label_nutrient_fraction": 0.21,
+      "tree_count": 7,
+      "product_kg_per_zone_per_year": 4.451470569989427,
+      "product_kg_per_palm_per_year": 0.6359243671413467
+    },
+    {
+      "zone_id": 1,
+      "product": "urea_N_expensive",
+      "nutrient": "N",
+      "elemental_nutrient_kg_per_zone_per_year": 0.9348088196977796,
+      "label_nutrient_fraction": 0.46,
+      "tree_count": 7,
+      "product_kg_per_zone_per_year": 2.032193086299521,
+      "product_kg_per_palm_per_year": 0.29031329804278866
+    },
+    {
+      "zone_id": 2,
+      "product": "kieserite_Mg_expensive",
+      "nutrient": "Mg",
+      "elemental_nutrient_kg_per_zone_per_year": 0.057694652124286906,
+      "label_nutrient_fraction": 0.15377567983326718,
+      "tree_count": 9,
+      "product_kg_per_zone_per_year": 0.37518710492350227,
+      "product_kg_per_palm_per_year": 0.04168745610261136
+    },
+    {
+      "zone_id": 2,
+      "product": "dolomite_Mg_cheaper",
+      "nutrient": "Mg",
+      "elemental_nutrient_kg_per_zone_per_year": 0.057694652124286906,
+      "label_nutrient_fraction": 0.13266921397379913,
+      "tree_count": 9,
+      "product_kg_per_zone_per_year": 0.4348759625249686,
+      "product_kg_per_palm_per_year": 0.048319551391663176
+    },
+    {
+      "zone_id": 2,
+      "product": "ZA_N_cheaper",
+      "nutrient": "N",
+      "elemental_nutrient_kg_per_zone_per_year": 0.38026020718280007,
+      "label_nutrient_fraction": 0.21,
+      "tree_count": 9,
+      "product_kg_per_zone_per_year": 1.8107628913466671,
+      "product_kg_per_palm_per_year": 0.20119587681629636
+    },
+    {
+      "zone_id": 2,
+      "product": "urea_N_expensive",
+      "nutrient": "N",
+      "elemental_nutrient_kg_per_zone_per_year": 0.38026020718280007,
+      "label_nutrient_fraction": 0.46,
+      "tree_count": 9,
+      "product_kg_per_zone_per_year": 0.8266526243104348,
+      "product_kg_per_palm_per_year": 0.09185029159004832
+    },
+    {
+      "zone_id": 3,
+      "product": "kieserite_Mg_expensive",
+      "nutrient": "Mg",
+      "elemental_nutrient_kg_per_zone_per_year": 0.0857040494909873,
+      "label_nutrient_fraction": 0.15377567983326718,
+      "tree_count": 8,
+      "product_kg_per_zone_per_year": 0.5573316247661059,
+      "product_kg_per_palm_per_year": 0.06966645309576323
+    },
+    {
+      "zone_id": 3,
+      "product": "dolomite_Mg_cheaper",
+      "nutrient": "Mg",
+      "elemental_nutrient_kg_per_zone_per_year": 0.0857040494909873,
+      "label_nutrient_fraction": 0.13266921397379913,
+      "tree_count": 8,
+      "product_kg_per_zone_per_year": 0.645998019615259,
+      "product_kg_per_palm_per_year": 0.08074975245190738
+    },
+    {
+      "zone_id": 3,
+      "product": "ZA_N_cheaper",
+      "nutrient": "N",
+      "elemental_nutrient_kg_per_zone_per_year": 0.5648675989178709,
+      "label_nutrient_fraction": 0.21,
+      "tree_count": 8,
+      "product_kg_per_zone_per_year": 2.6898457091327184,
+      "product_kg_per_palm_per_year": 0.3362307136415898
+    },
+    {
+      "zone_id": 3,
+      "product": "urea_N_expensive",
+      "nutrient": "N",
+      "elemental_nutrient_kg_per_zone_per_year": 0.5648675989178709,
+      "label_nutrient_fraction": 0.46,
+      "tree_count": 8,
+      "product_kg_per_zone_per_year": 1.227973041125806,
+      "product_kg_per_palm_per_year": 0.15349663014072576
+    },
+    {
+      "zone_id": 4,
+      "product": "kieserite_Mg_expensive",
+      "nutrient": "Mg",
+      "elemental_nutrient_kg_per_zone_per_year": 0.13489660791728142,
+      "label_nutrient_fraction": 0.15377567983326718,
+      "tree_count": 6,
+      "product_kg_per_zone_per_year": 0.8772297938369996,
+      "product_kg_per_palm_per_year": 0.14620496563949995
+    },
+    {
+      "zone_id": 4,
+      "product": "dolomite_Mg_cheaper",
+      "nutrient": "Mg",
+      "elemental_nutrient_kg_per_zone_per_year": 0.13489660791728142,
+      "label_nutrient_fraction": 0.13266921397379913,
+      "tree_count": 6,
+      "product_kg_per_zone_per_year": 1.0167890792201586,
+      "product_kg_per_palm_per_year": 0.1694648465366931
+    },
+    {
+      "zone_id": 4,
+      "product": "ZA_N_cheaper",
+      "nutrient": "N",
+      "elemental_nutrient_kg_per_zone_per_year": 0.8890912794548094,
+      "label_nutrient_fraction": 0.21,
+      "tree_count": 6,
+      "product_kg_per_zone_per_year": 4.233767997403854,
+      "product_kg_per_palm_per_year": 0.705627999567309
+    },
+    {
+      "zone_id": 4,
+      "product": "urea_N_expensive",
+      "nutrient": "N",
+      "elemental_nutrient_kg_per_zone_per_year": 0.8890912794548094,
+      "label_nutrient_fraction": 0.46,
+      "tree_count": 6,
+      "product_kg_per_zone_per_year": 1.9328071292495854,
+      "product_kg_per_palm_per_year": 0.32213452154159755
+    },
+    {
+      "zone_id": 5,
+      "product": "kieserite_Mg_expensive",
+      "nutrient": "Mg",
+      "elemental_nutrient_kg_per_zone_per_year": 0.26034125206331266,
+      "label_nutrient_fraction": 0.15377567983326718,
+      "tree_count": 9,
+      "product_kg_per_zone_per_year": 1.6929936667852177,
+      "product_kg_per_palm_per_year": 0.18811040742057974
+    },
+    {
+      "zone_id": 5,
+      "product": "dolomite_Mg_cheaper",
+      "nutrient": "Mg",
+      "elemental_nutrient_kg_per_zone_per_year": 0.26034125206331266,
+      "label_nutrient_fraction": 0.13266921397379913,
+      "tree_count": 9,
+      "product_kg_per_zone_per_year": 1.9623335683192296,
+      "product_kg_per_palm_per_year": 0.21803706314658106
+    },
+    {
+      "zone_id": 5,
+      "product": "ZA_N_cheaper",
+      "nutrient": "N",
+      "elemental_nutrient_kg_per_zone_per_year": 1.7158855249627425,
+      "label_nutrient_fraction": 0.21,
+      "tree_count": 9,
+      "product_kg_per_zone_per_year": 8.170883452203537,
+      "product_kg_per_palm_per_year": 0.9078759391337263
+    },
+    {
+      "zone_id": 5,
+      "product": "urea_N_expensive",
+      "nutrient": "N",
+      "elemental_nutrient_kg_per_zone_per_year": 1.7158855249627425,
+      "label_nutrient_fraction": 0.46,
+      "tree_count": 9,
+      "product_kg_per_zone_per_year": 3.7301859238320487,
+      "product_kg_per_palm_per_year": 0.4144651026480054
+    },
+    {
+      "zone_id": 6,
+      "product": "kieserite_Mg_expensive",
+      "nutrient": "Mg",
+      "elemental_nutrient_kg_per_zone_per_year": 0.0,
+      "label_nutrient_fraction": 0.15377567983326718,
+      "tree_count": 8,
+      "product_kg_per_zone_per_year": 0.0,
+      "product_kg_per_palm_per_year": 0.0
+    },
+    {
+      "zone_id": 6,
+      "product": "dolomite_Mg_cheaper",
+      "nutrient": "Mg",
+      "elemental_nutrient_kg_per_zone_per_year": 0.0,
+      "label_nutrient_fraction": 0.13266921397379913,
+      "tree_count": 8,
+      "product_kg_per_zone_per_year": 0.0,
+      "product_kg_per_palm_per_year": 0.0
+    },
+    {
+      "zone_id": 6,
+      "product": "ZA_N_cheaper",
+      "nutrient": "N",
+      "elemental_nutrient_kg_per_zone_per_year": 0.0,
+      "label_nutrient_fraction": 0.21,
+      "tree_count": 8,
+      "product_kg_per_zone_per_year": 0.0,
+      "product_kg_per_palm_per_year": 0.0
+    },
+    {
+      "zone_id": 6,
+      "product": "urea_N_expensive",
+      "nutrient": "N",
+      "elemental_nutrient_kg_per_zone_per_year": 0.0,
+      "label_nutrient_fraction": 0.46,
+      "tree_count": 8,
+      "product_kg_per_zone_per_year": 0.0,
+      "product_kg_per_palm_per_year": 0.0
+    }
+  ]
+}
