@@ -58,6 +58,7 @@ def main(argv=None):
             print(f"Error: Core ML model not found at {settings.model_path}", file=sys.stderr)
             return 1
         from .detection import Detector
+        from .weather import WeatherClient  # noqa: F401
 
         _ = Detector(settings.model_path)
         print("VARI engine siap")

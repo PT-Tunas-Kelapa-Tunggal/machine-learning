@@ -38,9 +38,12 @@ LAUNCHER_C_SOURCE = r"""#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <libgen.h>
+#include <dlfcn.h>
 #include <mach-o/dyld.h>
 #include <limits.h>
 #include <string.h>
+
+typedef int (*Py_BytesMain_func)(int, char **);
 
 int main(int argc, char *argv[]) {
     char exe_path[PATH_MAX];
@@ -49,7 +52,15 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "VariPython: failed to determine executable path\n");
         return 1;
     }
-    char *dir = dirname(exe_path);
+    char resolved_exe[PATH_MAX];
+    if (realpath(exe_path, resolved_exe) == NULL) {
+        strncpy(resolved_exe, exe_path, sizeof(resolved_exe) - 1);
+        resolved_exe[sizeof(resolved_exe) - 1] = '\0';
+    }
+    char dir_buf[PATH_MAX];
+    strncpy(dir_buf, resolved_exe, sizeof(dir_buf) - 1);
+    dir_buf[sizeof(dir_buf) - 1] = '\0';
+    char *dir = dirname(dir_buf);
 
     char pyhome[PATH_MAX];
     char engine_dir[PATH_MAX];
@@ -63,13 +74,25 @@ int main(int argc, char *argv[]) {
         snprintf(engine_dir, sizeof(engine_dir), "%s/VariEngine", dir);
     }
 
+    char resolved_pyhome[PATH_MAX];
+    if (realpath(pyhome, resolved_pyhome) != NULL) {
+        strncpy(pyhome, resolved_pyhome, sizeof(pyhome) - 1);
+        pyhome[sizeof(pyhome) - 1] = '\0';
+    }
+    char resolved_engine[PATH_MAX];
+    if (realpath(engine_dir, resolved_engine) != NULL) {
+        strncpy(engine_dir, resolved_engine, sizeof(engine_dir) - 1);
+        engine_dir[sizeof(engine_dir) - 1] = '\0';
+    }
+
     char pybin[PATH_MAX];
-    snprintf(pybin, sizeof(pybin), "%s/bin/python3", pyhome);
+    snprintf(pybin, sizeof(pybin), "%s/bin/python3.11", pyhome);
     if (access(pybin, F_OK) != 0) {
-        snprintf(pybin, sizeof(pybin), "%s/bin/python3.11", pyhome);
+        snprintf(pybin, sizeof(pybin), "%s/bin/python3", pyhome);
     }
 
     setenv("PYTHONHOME", pyhome, 1);
+    setenv("PYTHONEXECUTABLE", pybin, 1);
     setenv("PYTHONUNBUFFERED", "1", 1);
     setenv("PYTHONDONTWRITEBYTECODE", "1", 1);
     setenv("PYTHONNOUSERSITE", "1", 1);
@@ -93,6 +116,20 @@ int main(int argc, char *argv[]) {
         new_argv[i] = argv[i];
     }
     new_argv[argc] = NULL;
+
+    // Prefer in-process execution via libpython3.11.dylib so VariPython never drops
+    // its process identity or inherited macOS App Sandbox entitlements across execv().
+    char libpython[PATH_MAX];
+    snprintf(libpython, sizeof(libpython), "%s/lib/libpython3.11.dylib", pyhome);
+    if (access(libpython, R_OK) == 0) {
+        void *handle = dlopen(libpython, RTLD_LAZY | RTLD_GLOBAL);
+        if (handle != NULL) {
+            Py_BytesMain_func py_main = (Py_BytesMain_func)dlsym(handle, "Py_BytesMain");
+            if (py_main != NULL) {
+                return py_main(argc, new_argv);
+            }
+        }
+    }
 
     execv(pybin, new_argv);
     perror("VariPython: execv failed");
@@ -137,6 +174,22 @@ def main():
     dest_env = engine_dir / 'environment'
     run('/bin/cp', '-cR', str(runtime_prefix), str(dest_env))
 
+    # Validate that the copied runtime is a self-contained distribution (not a symlink-only venv)
+    stdlib_encodings = list(dest_env.glob('lib/python*/encodings/__init__.py'))
+    if not stdlib_encodings:
+        sys.exit(
+            f"error: Runtime at {runtime_prefix} is missing the Python standard library "
+            "(lib/python*/encodings/__init__.py). Use a standalone Conda environment "
+            "(e.g. 'conda create --prefix .build/prefix -y -c conda-forge python=3.11 pip'), "
+            "not 'python -m venv'."
+        )
+    py_bin_candidates = [p for p in (dest_env / 'bin').glob('python3.*') if not p.is_symlink() and p.name != 'python3.11-config']
+    if not py_bin_candidates:
+        sys.exit(
+            f"error: Runtime at {runtime_prefix}/bin does not contain a standalone python3.x binary "
+            "(found only symlinks). Use a Conda environment rather than 'python -m venv'."
+        )
+
     # 2. Copy source code and Core ML model
     print("[2/6] Copying krops_vari, model, and weather rules...")
     dest_package = engine_dir / 'krops_vari'
@@ -156,11 +209,20 @@ def main():
 
     dest_weather = engine_dir / 'weather'
     dest_weather.mkdir(parents=True, exist_ok=True)
-    for rule_file in ('krops_rules.py', 'l6_vari_confidence.py', 'nasa_power_job.py'):
+    for rule_file in (
+        'krops_rules.py',
+        'l2_scan_rain.py',
+        'l5_water_balance.py',
+        'l6_vari_confidence.py',
+        'l9_irradiance_check.py',
+        'nasa_power_job.py',
+        'solar.py',
+    ):
         src_file = weather_src / rule_file
-        if src_file.exists():
-            shutil.copy2(src_file, dest_weather / rule_file)
-            print(f"  Copied weather rule: {rule_file}")
+        if not src_file.exists():
+            sys.exit(f"error: Required weather module missing: {src_file}")
+        shutil.copy2(src_file, dest_weather / rule_file)
+        print(f"  Copied weather rule: {rule_file}")
 
     # Copy plots.json if present
     plots_file = weather_src / 'plots.json'

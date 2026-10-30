@@ -42,15 +42,18 @@ jobs:
           echo "TAG=$TAG" >> $GITHUB_OUTPUT
           echo "Target Release Tag: $TAG"
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
+      - name: Setup Miniforge (Conda-Forge)
+        uses: conda-incubator/setup-miniconda@v3
         with:
-          python-version: '3.11'
+          miniforge-version: latest
+          auto-update-conda: false
+          channels: conda-forge
+          channel-priority: strict
 
-      - name: Build Isolated Runtime Prefix
+      - name: Build Isolated Standalone Runtime Prefix
+        shell: bash -el {0}
         run: |
-          mkdir -p .build/prefix
-          python3.11 -m venv .build/prefix
+          conda create --prefix .build/prefix -y -c conda-forge python=3.11 pip
           .build/prefix/bin/python -m pip install --upgrade pip
           .build/prefix/bin/pip install ./integration
 
@@ -64,6 +67,8 @@ jobs:
             --version "${{ steps.vars.outputs.TAG }}" \
             --commit "${{ github.sha }}" \
             --output .build/dist
+          rm -rf .build/prefix
+          .build/dist/VariPython -m krops_vari.main --check
 
       - name: Compress & Checksum Archive
         run: |
