@@ -14,7 +14,7 @@
     "minimum_p95_p25_gap_for_blanket_boost": 0.03,
     "zone_boost_mode": "zone_specific",
     "zone_mean_vari_percentile_rank_definition": "100 × number of valid zone means less than or equal to this zone mean ÷ number of valid zones; empirical rank within this image only",
-    "fertilizer_boost_formula": "Mg_i=Bi*Mg_max; N_i=Bi*N_max; annual zone nutrient kg=annual nutrient kg/ha*zone area ha",
+    "fertilizer_boost_formula": "Additional nutrient supplement: Mg_i=Bi*Mg_max; N_i=Bi*N_max; annual zone supplement kg=annual supplement kg/ha*zone area ha",
     "reference_zone_mean_vari": 0.2414030283689499,
     "zone_confidence_default": 0.6,
     "max_nutrient_targets_kg_ha_per_year": {
@@ -33,10 +33,23 @@
       "ZA_N_cheaper": 0.21,
       "urea_N_expensive": 0.46
     },
+    "base_product_rates_kg_per_palm_per_year": {
+      "kieserite_Mg_expensive": null,
+      "dolomite_Mg_cheaper": null,
+      "ZA_N_cheaper": null,
+      "urea_N_expensive": null
+    },
+    "fertilizer_output_scope": "VARI-scaled additional elemental nutrient supplement and its product-mass equivalent; full maintenance fertilizer schedule is not included unless a separate approved product base rate is configured",
     "fertilizer_prices_per_kg": {},
-    "ground_area_source": "user-supplied mapping/uniform area when provided; otherwise estimated as detected tree count × 10 m × 10 m, not from image pixels",
+    "configured_total_farm_area_ha": 2.0,
+    "effective_total_zone_area_ha": 2.0,
+    "max_nutrient_totals_for_effective_farm_area_kg_per_year": {
+      "Mg": 44.0,
+      "N": 290.0
+    },
+    "ground_area_source": "configured total farm area split by detected tree counts",
     "vari_pixel_filter": "Only finite VARI pixels with non-zero denominator inside ExG mask are included",
-    "model_path": "krops_model_v0.2.mlpackage",
+    "model_path": "krops_model_v0.2_yolo26l.mlpackage",
     "confidence_threshold": 0.1,
     "maximum_tree_dimension_multiplier": 4.0,
     "maximum_tree_area_multiplier": 20.0,
@@ -47,7 +60,7 @@
     "row_tolerance_multiplier": 0.75,
     "detected_tree_count": 47,
     "zone_count": 6,
-    "coordinate_system": "Pixel coordinates use origin (0,0) at top-left; bbox x1,y1 inclusive-ish and x2,y2 exclusive crop boundary. normalized_xyxy values are divided by original image width/height.",
+    "coordinate_system": "Pixel coordinates use origin (0,0) at top-left; bbox x1,y1 inclusive-ish and x2,y2 exclusive crop boundary; center_point and center provide (x, y) coordinates for each zone based on the white-separator zoning image. normalized_xyxy and normalized_x/y values are divided by original image width/height.",
     "limitations": [
       "ExG is a heuristic vegetation mask and may include weeds or omit shaded palm leaves.",
       "Zone rectangles are generated from spatial grouping of detected trees; they are not guaranteed to match actual plantation blocks or planting rows.",
@@ -56,7 +69,7 @@
       "VARI is an RGB vegetation index, not a direct diagnosis of palm health or fertilizer requirement.",
       "Fertilizer rates and prices are illustrative/configurable and are not agronomic recommendations.",
       "Reported fertilizer boosts and totals are elemental Mg or N quantities; they are not converted to product mass.",
-      "Ground zone areas are not derived from image pixels. If measured areas are not supplied, fertilizer quantities use an approximate 10 m palm spacing (0.01 ha per detected palm); actual zone area may differ."
+      "Ground zone areas are not derived from image pixels. Unless per-zone or uniform areas are supplied, the configured total farm area is allocated among zones in proportion to detected tree counts; missed detections can therefore affect area allocation. This is not a geospatial area measurement."
     ]
   },
   "zones": [
@@ -292,7 +305,7 @@
         "zone_specific_boost_fraction": 0.09209939110322951,
         "vari_deficit_fraction": 0.15349898517204918,
         "boost_fraction": 0.09209939110322951,
-        "zone_area_ha": 0.07,
+        "zone_area_ha": 0.2978723404255319,
         "fertilizers": {
           "kieserite_Mg_expensive": {
             "base_rate_kg_ha_per_year": 22.0,
@@ -300,10 +313,10 @@
             "boosted_rate_kg_ha_per_year": 2.0261866042710492,
             "recommended_nutrient": "Mg",
             "recommended_nutrient_kg_ha_per_year": 2.0261866042710492,
-            "annual_total_kg": 0.14183306229897347,
-            "kg_per_palm_per_year": 0.020261866042710495,
+            "annual_total_kg": 0.6035449459530785,
+            "kg_per_palm_per_year": 0.0862207065647255,
             "mg_kg_ha_per_year": 2.0261866042710492,
-            "mg_total_kg_per_year": 0.14183306229897347
+            "mg_total_kg_per_year": 0.6035449459530785
           },
           "dolomite_Mg_cheaper": {
             "base_rate_kg_ha_per_year": 22.0,
@@ -311,10 +324,10 @@
             "boosted_rate_kg_ha_per_year": 2.0261866042710492,
             "recommended_nutrient": "Mg",
             "recommended_nutrient_kg_ha_per_year": 2.0261866042710492,
-            "annual_total_kg": 0.14183306229897347,
-            "kg_per_palm_per_year": 0.020261866042710495,
+            "annual_total_kg": 0.6035449459530785,
+            "kg_per_palm_per_year": 0.0862207065647255,
             "mg_kg_ha_per_year": 2.0261866042710492,
-            "mg_total_kg_per_year": 0.14183306229897347
+            "mg_total_kg_per_year": 0.6035449459530785
           },
           "ZA_N_cheaper": {
             "base_rate_kg_ha_per_year": 145.0,
@@ -322,10 +335,10 @@
             "boosted_rate_kg_ha_per_year": 13.354411709968279,
             "recommended_nutrient": "N",
             "recommended_nutrient_kg_ha_per_year": 13.354411709968279,
-            "annual_total_kg": 0.9348088196977796,
-            "kg_per_palm_per_year": 0.1335441170996828,
+            "annual_total_kg": 3.9779098710543805,
+            "kg_per_palm_per_year": 0.5682728387220544,
             "n_kg_ha_per_year": 13.354411709968279,
-            "n_total_kg_per_year": 0.9348088196977796
+            "n_total_kg_per_year": 3.9779098710543805
           },
           "urea_N_expensive": {
             "base_rate_kg_ha_per_year": 145.0,
@@ -333,13 +346,29 @@
             "boosted_rate_kg_ha_per_year": 13.354411709968279,
             "recommended_nutrient": "N",
             "recommended_nutrient_kg_ha_per_year": 13.354411709968279,
-            "annual_total_kg": 0.9348088196977796,
-            "kg_per_palm_per_year": 0.1335441170996828,
+            "annual_total_kg": 3.9779098710543805,
+            "kg_per_palm_per_year": 0.5682728387220544,
             "n_kg_ha_per_year": 13.354411709968279,
-            "n_total_kg_per_year": 0.9348088196977796
+            "n_total_kg_per_year": 3.9779098710543805
           }
         },
-        "area_note": "Approximate area from detected tree count × spacing²; default spacing is 10 m (midpoint of 9–11 m). Replace with measured zone areas when available."
+        "area_note": "Total farm area split across zones in proportion to detected tree counts; replace with measured zone areas when available."
+      },
+      "center_point": {
+        "x": 399.28,
+        "y": 497.08,
+        "normalized_x": 0.204759,
+        "normalized_y": 0.298728
+      },
+      "center": {
+        "x": 399.28,
+        "y": 497.08
+      },
+      "partition_center_point": {
+        "x": 376.56,
+        "y": 423.57,
+        "normalized_x": 0.193109,
+        "normalized_y": 0.254551
       },
       "base_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_base_crops/zone_01.jpg",
       "exg_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_exg_crops/zone_01.jpg"
@@ -630,7 +659,7 @@
         "zone_specific_boost_fraction": 0.029138713194084297,
         "vari_deficit_fraction": 0.0485645219901405,
         "boost_fraction": 0.029138713194084297,
-        "zone_area_ha": 0.09,
+        "zone_area_ha": 0.3829787234042553,
         "fertilizers": {
           "kieserite_Mg_expensive": {
             "base_rate_kg_ha_per_year": 22.0,
@@ -638,10 +667,10 @@
             "boosted_rate_kg_ha_per_year": 0.6410516902698545,
             "recommended_nutrient": "Mg",
             "recommended_nutrient_kg_ha_per_year": 0.6410516902698545,
-            "annual_total_kg": 0.057694652124286906,
-            "kg_per_palm_per_year": 0.006410516902698545,
+            "annual_total_kg": 0.24550915797568898,
+            "kg_per_palm_per_year": 0.02727879533063211,
             "mg_kg_ha_per_year": 0.6410516902698545,
-            "mg_total_kg_per_year": 0.057694652124286906
+            "mg_total_kg_per_year": 0.24550915797568898
           },
           "dolomite_Mg_cheaper": {
             "base_rate_kg_ha_per_year": 22.0,
@@ -649,10 +678,10 @@
             "boosted_rate_kg_ha_per_year": 0.6410516902698545,
             "recommended_nutrient": "Mg",
             "recommended_nutrient_kg_ha_per_year": 0.6410516902698545,
-            "annual_total_kg": 0.057694652124286906,
-            "kg_per_palm_per_year": 0.006410516902698545,
+            "annual_total_kg": 0.24550915797568898,
+            "kg_per_palm_per_year": 0.02727879533063211,
             "mg_kg_ha_per_year": 0.6410516902698545,
-            "mg_total_kg_per_year": 0.057694652124286906
+            "mg_total_kg_per_year": 0.24550915797568898
           },
           "ZA_N_cheaper": {
             "base_rate_kg_ha_per_year": 145.0,
@@ -660,10 +689,10 @@
             "boosted_rate_kg_ha_per_year": 4.225113413142223,
             "recommended_nutrient": "N",
             "recommended_nutrient_kg_ha_per_year": 4.225113413142223,
-            "annual_total_kg": 0.38026020718280007,
-            "kg_per_palm_per_year": 0.04225113413142223,
+            "annual_total_kg": 1.6181285412034045,
+            "kg_per_palm_per_year": 0.17979206013371163,
             "n_kg_ha_per_year": 4.225113413142223,
-            "n_total_kg_per_year": 0.38026020718280007
+            "n_total_kg_per_year": 1.6181285412034045
           },
           "urea_N_expensive": {
             "base_rate_kg_ha_per_year": 145.0,
@@ -671,13 +700,29 @@
             "boosted_rate_kg_ha_per_year": 4.225113413142223,
             "recommended_nutrient": "N",
             "recommended_nutrient_kg_ha_per_year": 4.225113413142223,
-            "annual_total_kg": 0.38026020718280007,
-            "kg_per_palm_per_year": 0.04225113413142223,
+            "annual_total_kg": 1.6181285412034045,
+            "kg_per_palm_per_year": 0.17979206013371163,
             "n_kg_ha_per_year": 4.225113413142223,
-            "n_total_kg_per_year": 0.38026020718280007
+            "n_total_kg_per_year": 1.6181285412034045
           }
         },
-        "area_note": "Approximate area from detected tree count × spacing²; default spacing is 10 m (midpoint of 9–11 m). Replace with measured zone areas when available."
+        "area_note": "Total farm area split across zones in proportion to detected tree counts; replace with measured zone areas when available."
+      },
+      "center_point": {
+        "x": 934.45,
+        "y": 445.59,
+        "normalized_x": 0.479206,
+        "normalized_y": 0.26778
+      },
+      "center": {
+        "x": 934.45,
+        "y": 445.59
+      },
+      "partition_center_point": {
+        "x": 928.21,
+        "y": 412.46,
+        "normalized_x": 0.476004,
+        "normalized_y": 0.247875
       },
       "base_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_base_crops/zone_02.jpg",
       "exg_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_exg_crops/zone_02.jpg"
@@ -941,7 +986,7 @@
         "zone_specific_boost_fraction": 0.048695482665333696,
         "vari_deficit_fraction": 0.08115913777555617,
         "boost_fraction": 0.048695482665333696,
-        "zone_area_ha": 0.08,
+        "zone_area_ha": 0.3404255319148936,
         "fertilizers": {
           "kieserite_Mg_expensive": {
             "base_rate_kg_ha_per_year": 22.0,
@@ -949,10 +994,10 @@
             "boosted_rate_kg_ha_per_year": 1.0713006186373413,
             "recommended_nutrient": "Mg",
             "recommended_nutrient_kg_ha_per_year": 1.0713006186373413,
-            "annual_total_kg": 0.0857040494909873,
-            "kg_per_palm_per_year": 0.010713006186373412,
+            "annual_total_kg": 0.3646980829403715,
+            "kg_per_palm_per_year": 0.045587260367546435,
             "mg_kg_ha_per_year": 1.0713006186373413,
-            "mg_total_kg_per_year": 0.0857040494909873
+            "mg_total_kg_per_year": 0.3646980829403715
           },
           "dolomite_Mg_cheaper": {
             "base_rate_kg_ha_per_year": 22.0,
@@ -960,10 +1005,10 @@
             "boosted_rate_kg_ha_per_year": 1.0713006186373413,
             "recommended_nutrient": "Mg",
             "recommended_nutrient_kg_ha_per_year": 1.0713006186373413,
-            "annual_total_kg": 0.0857040494909873,
-            "kg_per_palm_per_year": 0.010713006186373412,
+            "annual_total_kg": 0.3646980829403715,
+            "kg_per_palm_per_year": 0.045587260367546435,
             "mg_kg_ha_per_year": 1.0713006186373413,
-            "mg_total_kg_per_year": 0.0857040494909873
+            "mg_total_kg_per_year": 0.3646980829403715
           },
           "ZA_N_cheaper": {
             "base_rate_kg_ha_per_year": 145.0,
@@ -971,10 +1016,10 @@
             "boosted_rate_kg_ha_per_year": 7.060844986473386,
             "recommended_nutrient": "N",
             "recommended_nutrient_kg_ha_per_year": 7.060844986473386,
-            "annual_total_kg": 0.5648675989178709,
-            "kg_per_palm_per_year": 0.07060844986473386,
+            "annual_total_kg": 2.403691910288812,
+            "kg_per_palm_per_year": 0.3004614887861015,
             "n_kg_ha_per_year": 7.060844986473386,
-            "n_total_kg_per_year": 0.5648675989178709
+            "n_total_kg_per_year": 2.403691910288812
           },
           "urea_N_expensive": {
             "base_rate_kg_ha_per_year": 145.0,
@@ -982,13 +1027,29 @@
             "boosted_rate_kg_ha_per_year": 7.060844986473386,
             "recommended_nutrient": "N",
             "recommended_nutrient_kg_ha_per_year": 7.060844986473386,
-            "annual_total_kg": 0.5648675989178709,
-            "kg_per_palm_per_year": 0.07060844986473386,
+            "annual_total_kg": 2.403691910288812,
+            "kg_per_palm_per_year": 0.3004614887861015,
             "n_kg_ha_per_year": 7.060844986473386,
-            "n_total_kg_per_year": 0.5648675989178709
+            "n_total_kg_per_year": 2.403691910288812
           }
         },
-        "area_note": "Approximate area from detected tree count × spacing²; default spacing is 10 m (midpoint of 9–11 m). Replace with measured zone areas when available."
+        "area_note": "Total farm area split across zones in proportion to detected tree counts; replace with measured zone areas when available."
+      },
+      "center_point": {
+        "x": 1460.15,
+        "y": 466.2,
+        "normalized_x": 0.748795,
+        "normalized_y": 0.280168
+      },
+      "center": {
+        "x": 1460.15,
+        "y": 466.2
+      },
+      "partition_center_point": {
+        "x": 1520.97,
+        "y": 436.01,
+        "normalized_x": 0.779983,
+        "normalized_y": 0.262027
       },
       "base_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_base_crops/zone_03.jpg",
       "exg_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_exg_crops/zone_03.jpg"
@@ -1198,7 +1259,7 @@
         "zone_specific_boost_fraction": 0.10219439993733441,
         "vari_deficit_fraction": 0.17032399989555735,
         "boost_fraction": 0.10219439993733441,
-        "zone_area_ha": 0.06,
+        "zone_area_ha": 0.2553191489361702,
         "fertilizers": {
           "kieserite_Mg_expensive": {
             "base_rate_kg_ha_per_year": 22.0,
@@ -1206,10 +1267,10 @@
             "boosted_rate_kg_ha_per_year": 2.248276798621357,
             "recommended_nutrient": "Mg",
             "recommended_nutrient_kg_ha_per_year": 2.248276798621357,
-            "annual_total_kg": 0.13489660791728142,
-            "kg_per_palm_per_year": 0.02248276798621357,
+            "annual_total_kg": 0.5740281187969423,
+            "kg_per_palm_per_year": 0.09567135313282371,
             "mg_kg_ha_per_year": 2.248276798621357,
-            "mg_total_kg_per_year": 0.13489660791728142
+            "mg_total_kg_per_year": 0.5740281187969423
           },
           "dolomite_Mg_cheaper": {
             "base_rate_kg_ha_per_year": 22.0,
@@ -1217,10 +1278,10 @@
             "boosted_rate_kg_ha_per_year": 2.248276798621357,
             "recommended_nutrient": "Mg",
             "recommended_nutrient_kg_ha_per_year": 2.248276798621357,
-            "annual_total_kg": 0.13489660791728142,
-            "kg_per_palm_per_year": 0.02248276798621357,
+            "annual_total_kg": 0.5740281187969423,
+            "kg_per_palm_per_year": 0.09567135313282371,
             "mg_kg_ha_per_year": 2.248276798621357,
-            "mg_total_kg_per_year": 0.13489660791728142
+            "mg_total_kg_per_year": 0.5740281187969423
           },
           "ZA_N_cheaper": {
             "base_rate_kg_ha_per_year": 145.0,
@@ -1228,10 +1289,10 @@
             "boosted_rate_kg_ha_per_year": 14.81818799091349,
             "recommended_nutrient": "N",
             "recommended_nutrient_kg_ha_per_year": 14.81818799091349,
-            "annual_total_kg": 0.8890912794548094,
-            "kg_per_palm_per_year": 0.1481818799091349,
+            "annual_total_kg": 3.78336714661621,
+            "kg_per_palm_per_year": 0.6305611911027017,
             "n_kg_ha_per_year": 14.81818799091349,
-            "n_total_kg_per_year": 0.8890912794548094
+            "n_total_kg_per_year": 3.78336714661621
           },
           "urea_N_expensive": {
             "base_rate_kg_ha_per_year": 145.0,
@@ -1239,13 +1300,29 @@
             "boosted_rate_kg_ha_per_year": 14.81818799091349,
             "recommended_nutrient": "N",
             "recommended_nutrient_kg_ha_per_year": 14.81818799091349,
-            "annual_total_kg": 0.8890912794548094,
-            "kg_per_palm_per_year": 0.1481818799091349,
+            "annual_total_kg": 3.78336714661621,
+            "kg_per_palm_per_year": 0.6305611911027017,
             "n_kg_ha_per_year": 14.81818799091349,
-            "n_total_kg_per_year": 0.8890912794548094
+            "n_total_kg_per_year": 3.78336714661621
           }
         },
-        "area_note": "Approximate area from detected tree count × spacing²; default spacing is 10 m (midpoint of 9–11 m). Replace with measured zone areas when available."
+        "area_note": "Total farm area split across zones in proportion to detected tree counts; replace with measured zone areas when available."
+      },
+      "center_point": {
+        "x": 360.62,
+        "y": 1181.33,
+        "normalized_x": 0.184932,
+        "normalized_y": 0.709932
+      },
+      "center": {
+        "x": 360.62,
+        "y": 1181.33
+      },
+      "partition_center_point": {
+        "x": 322.57,
+        "y": 1219.44,
+        "normalized_x": 0.16542,
+        "normalized_y": 0.732834
       },
       "base_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_base_crops/zone_04.jpg",
       "exg_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_exg_crops/zone_04.jpg"
@@ -1536,7 +1613,7 @@
         "zone_specific_boost_fraction": 0.1314854808400569,
         "vari_deficit_fraction": 0.21914246806676152,
         "boost_fraction": 0.1314854808400569,
-        "zone_area_ha": 0.09,
+        "zone_area_ha": 0.3829787234042553,
         "fertilizers": {
           "kieserite_Mg_expensive": {
             "base_rate_kg_ha_per_year": 22.0,
@@ -1544,10 +1621,10 @@
             "boosted_rate_kg_ha_per_year": 2.8926805784812517,
             "recommended_nutrient": "Mg",
             "recommended_nutrient_kg_ha_per_year": 2.8926805784812517,
-            "annual_total_kg": 0.26034125206331266,
-            "kg_per_palm_per_year": 0.028926805784812517,
+            "annual_total_kg": 1.1078351151630326,
+            "kg_per_palm_per_year": 0.12309279057367029,
             "mg_kg_ha_per_year": 2.8926805784812517,
-            "mg_total_kg_per_year": 0.26034125206331266
+            "mg_total_kg_per_year": 1.1078351151630326
           },
           "dolomite_Mg_cheaper": {
             "base_rate_kg_ha_per_year": 22.0,
@@ -1555,10 +1632,10 @@
             "boosted_rate_kg_ha_per_year": 2.8926805784812517,
             "recommended_nutrient": "Mg",
             "recommended_nutrient_kg_ha_per_year": 2.8926805784812517,
-            "annual_total_kg": 0.26034125206331266,
-            "kg_per_palm_per_year": 0.028926805784812517,
+            "annual_total_kg": 1.1078351151630326,
+            "kg_per_palm_per_year": 0.12309279057367029,
             "mg_kg_ha_per_year": 2.8926805784812517,
-            "mg_total_kg_per_year": 0.26034125206331266
+            "mg_total_kg_per_year": 1.1078351151630326
           },
           "ZA_N_cheaper": {
             "base_rate_kg_ha_per_year": 145.0,
@@ -1566,10 +1643,10 @@
             "boosted_rate_kg_ha_per_year": 19.06539472180825,
             "recommended_nutrient": "N",
             "recommended_nutrient_kg_ha_per_year": 19.06539472180825,
-            "annual_total_kg": 1.7158855249627425,
-            "kg_per_palm_per_year": 0.1906539472180825,
+            "annual_total_kg": 7.301640531756351,
+            "kg_per_palm_per_year": 0.8112933924173723,
             "n_kg_ha_per_year": 19.06539472180825,
-            "n_total_kg_per_year": 1.7158855249627425
+            "n_total_kg_per_year": 7.301640531756351
           },
           "urea_N_expensive": {
             "base_rate_kg_ha_per_year": 145.0,
@@ -1577,13 +1654,29 @@
             "boosted_rate_kg_ha_per_year": 19.06539472180825,
             "recommended_nutrient": "N",
             "recommended_nutrient_kg_ha_per_year": 19.06539472180825,
-            "annual_total_kg": 1.7158855249627425,
-            "kg_per_palm_per_year": 0.1906539472180825,
+            "annual_total_kg": 7.301640531756351,
+            "kg_per_palm_per_year": 0.8112933924173723,
             "n_kg_ha_per_year": 19.06539472180825,
-            "n_total_kg_per_year": 1.7158855249627425
+            "n_total_kg_per_year": 7.301640531756351
           }
         },
-        "area_note": "Approximate area from detected tree count × spacing²; default spacing is 10 m (midpoint of 9–11 m). Replace with measured zone areas when available."
+        "area_note": "Total farm area split across zones in proportion to detected tree counts; replace with measured zone areas when available."
+      },
+      "center_point": {
+        "x": 895.36,
+        "y": 1310.28,
+        "normalized_x": 0.459159,
+        "normalized_y": 0.787431
+      },
+      "center": {
+        "x": 895.36,
+        "y": 1310.28
+      },
+      "partition_center_point": {
+        "x": 890.24,
+        "y": 1315.79,
+        "normalized_x": 0.456532,
+        "normalized_y": 0.790739
       },
       "base_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_base_crops/zone_05.jpg",
       "exg_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_exg_crops/zone_05.jpg"
@@ -1847,7 +1940,7 @@
         "zone_specific_boost_fraction": 0.0,
         "vari_deficit_fraction": 0.0,
         "boost_fraction": 0.0,
-        "zone_area_ha": 0.08,
+        "zone_area_ha": 0.3404255319148936,
         "fertilizers": {
           "kieserite_Mg_expensive": {
             "base_rate_kg_ha_per_year": 22.0,
@@ -1894,7 +1987,23 @@
             "n_total_kg_per_year": 0.0
           }
         },
-        "area_note": "Approximate area from detected tree count × spacing²; default spacing is 10 m (midpoint of 9–11 m). Replace with measured zone areas when available."
+        "area_note": "Total farm area split across zones in proportion to detected tree counts; replace with measured zone areas when available."
+      },
+      "center_point": {
+        "x": 1541.47,
+        "y": 1232.04,
+        "normalized_x": 0.790496,
+        "normalized_y": 0.740411
+      },
+      "center": {
+        "x": 1541.47,
+        "y": 1232.04
+      },
+      "partition_center_point": {
+        "x": 1560.53,
+        "y": 1250.32,
+        "normalized_x": 0.800272,
+        "normalized_y": 0.751397
       },
       "base_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_base_crops/zone_06.jpg",
       "exg_image_crop": "/Users/putragandadewata/Desktop/ADA_IL_Challenge/Krops-Challenge6/machine_learning_krops_final_git/segmentation/iteration2/oil_palm_zone_exg_crops/zone_06.jpg"
@@ -1905,201 +2014,261 @@
       "zone_id": 1,
       "product": "kieserite_Mg_expensive",
       "nutrient": "Mg",
-      "elemental_nutrient_kg_per_zone_per_year": 0.14183306229897347,
+      "elemental_nutrient_kg_per_zone_per_year": 0.6035449459530785,
       "label_nutrient_fraction": 0.15377567983326718,
       "tree_count": 7,
-      "product_kg_per_zone_per_year": 0.9223374102638167,
-      "product_kg_per_palm_per_year": 0.13176248718054523
+      "product_kg_per_zone_per_year": 3.924840043675815,
+      "product_kg_per_palm_per_year": 0.5606914348108307,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 1,
       "product": "dolomite_Mg_cheaper",
       "nutrient": "Mg",
-      "elemental_nutrient_kg_per_zone_per_year": 0.14183306229897347,
+      "elemental_nutrient_kg_per_zone_per_year": 0.6035449459530785,
       "label_nutrient_fraction": 0.13266921397379913,
       "tree_count": 7,
-      "product_kg_per_zone_per_year": 1.069072907351242,
-      "product_kg_per_palm_per_year": 0.1527247010501774
+      "product_kg_per_zone_per_year": 4.549246414260604,
+      "product_kg_per_palm_per_year": 0.649892344894372,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 1,
       "product": "ZA_N_cheaper",
       "nutrient": "N",
-      "elemental_nutrient_kg_per_zone_per_year": 0.9348088196977796,
+      "elemental_nutrient_kg_per_zone_per_year": 3.9779098710543805,
       "label_nutrient_fraction": 0.21,
       "tree_count": 7,
-      "product_kg_per_zone_per_year": 4.451470569989427,
-      "product_kg_per_palm_per_year": 0.6359243671413467
+      "product_kg_per_zone_per_year": 18.94242795740181,
+      "product_kg_per_palm_per_year": 2.7060611367716874,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 1,
       "product": "urea_N_expensive",
       "nutrient": "N",
-      "elemental_nutrient_kg_per_zone_per_year": 0.9348088196977796,
+      "elemental_nutrient_kg_per_zone_per_year": 3.9779098710543805,
       "label_nutrient_fraction": 0.46,
       "tree_count": 7,
-      "product_kg_per_zone_per_year": 2.032193086299521,
-      "product_kg_per_palm_per_year": 0.29031329804278866
+      "product_kg_per_zone_per_year": 8.647630154466045,
+      "product_kg_per_palm_per_year": 1.2353757363522921,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 2,
       "product": "kieserite_Mg_expensive",
       "nutrient": "Mg",
-      "elemental_nutrient_kg_per_zone_per_year": 0.057694652124286906,
+      "elemental_nutrient_kg_per_zone_per_year": 0.24550915797568898,
       "label_nutrient_fraction": 0.15377567983326718,
       "tree_count": 9,
-      "product_kg_per_zone_per_year": 0.37518710492350227,
-      "product_kg_per_palm_per_year": 0.04168745610261136
+      "product_kg_per_zone_per_year": 1.5965408720149035,
+      "product_kg_per_palm_per_year": 0.17739343022387816,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 2,
       "product": "dolomite_Mg_cheaper",
       "nutrient": "Mg",
-      "elemental_nutrient_kg_per_zone_per_year": 0.057694652124286906,
+      "elemental_nutrient_kg_per_zone_per_year": 0.24550915797568898,
       "label_nutrient_fraction": 0.13266921397379913,
       "tree_count": 9,
-      "product_kg_per_zone_per_year": 0.4348759625249686,
-      "product_kg_per_palm_per_year": 0.048319551391663176
+      "product_kg_per_zone_per_year": 1.8505360107445472,
+      "product_kg_per_palm_per_year": 0.2056151123049497,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 2,
       "product": "ZA_N_cheaper",
       "nutrient": "N",
-      "elemental_nutrient_kg_per_zone_per_year": 0.38026020718280007,
+      "elemental_nutrient_kg_per_zone_per_year": 1.6181285412034045,
       "label_nutrient_fraction": 0.21,
       "tree_count": 9,
-      "product_kg_per_zone_per_year": 1.8107628913466671,
-      "product_kg_per_palm_per_year": 0.20119587681629636
+      "product_kg_per_zone_per_year": 7.705374005730498,
+      "product_kg_per_palm_per_year": 0.8561526673033887,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 2,
       "product": "urea_N_expensive",
       "nutrient": "N",
-      "elemental_nutrient_kg_per_zone_per_year": 0.38026020718280007,
+      "elemental_nutrient_kg_per_zone_per_year": 1.6181285412034045,
       "label_nutrient_fraction": 0.46,
       "tree_count": 9,
-      "product_kg_per_zone_per_year": 0.8266526243104348,
-      "product_kg_per_palm_per_year": 0.09185029159004832
+      "product_kg_per_zone_per_year": 3.5176707417465316,
+      "product_kg_per_palm_per_year": 0.3908523046385035,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 3,
       "product": "kieserite_Mg_expensive",
       "nutrient": "Mg",
-      "elemental_nutrient_kg_per_zone_per_year": 0.0857040494909873,
+      "elemental_nutrient_kg_per_zone_per_year": 0.3646980829403715,
       "label_nutrient_fraction": 0.15377567983326718,
       "tree_count": 8,
-      "product_kg_per_zone_per_year": 0.5573316247661059,
-      "product_kg_per_palm_per_year": 0.06966645309576323
+      "product_kg_per_zone_per_year": 2.371623935174919,
+      "product_kg_per_palm_per_year": 0.29645299189686486,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 3,
       "product": "dolomite_Mg_cheaper",
       "nutrient": "Mg",
-      "elemental_nutrient_kg_per_zone_per_year": 0.0857040494909873,
+      "elemental_nutrient_kg_per_zone_per_year": 0.3646980829403715,
       "label_nutrient_fraction": 0.13266921397379913,
       "tree_count": 8,
-      "product_kg_per_zone_per_year": 0.645998019615259,
-      "product_kg_per_palm_per_year": 0.08074975245190738
+      "product_kg_per_zone_per_year": 2.7489277430436556,
+      "product_kg_per_palm_per_year": 0.34361596788045695,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 3,
       "product": "ZA_N_cheaper",
       "nutrient": "N",
-      "elemental_nutrient_kg_per_zone_per_year": 0.5648675989178709,
+      "elemental_nutrient_kg_per_zone_per_year": 2.403691910288812,
       "label_nutrient_fraction": 0.21,
       "tree_count": 8,
-      "product_kg_per_zone_per_year": 2.6898457091327184,
-      "product_kg_per_palm_per_year": 0.3362307136415898
+      "product_kg_per_zone_per_year": 11.44615195375625,
+      "product_kg_per_palm_per_year": 1.4307689942195312,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 3,
       "product": "urea_N_expensive",
       "nutrient": "N",
-      "elemental_nutrient_kg_per_zone_per_year": 0.5648675989178709,
+      "elemental_nutrient_kg_per_zone_per_year": 2.403691910288812,
       "label_nutrient_fraction": 0.46,
       "tree_count": 8,
-      "product_kg_per_zone_per_year": 1.227973041125806,
-      "product_kg_per_palm_per_year": 0.15349663014072576
+      "product_kg_per_zone_per_year": 5.225417196280026,
+      "product_kg_per_palm_per_year": 0.6531771495350033,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 4,
       "product": "kieserite_Mg_expensive",
       "nutrient": "Mg",
-      "elemental_nutrient_kg_per_zone_per_year": 0.13489660791728142,
+      "elemental_nutrient_kg_per_zone_per_year": 0.5740281187969423,
       "label_nutrient_fraction": 0.15377567983326718,
       "tree_count": 6,
-      "product_kg_per_zone_per_year": 0.8772297938369996,
-      "product_kg_per_palm_per_year": 0.14620496563949995
+      "product_kg_per_zone_per_year": 3.7328927397319136,
+      "product_kg_per_palm_per_year": 0.622148789955319,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 4,
       "product": "dolomite_Mg_cheaper",
       "nutrient": "Mg",
-      "elemental_nutrient_kg_per_zone_per_year": 0.13489660791728142,
+      "elemental_nutrient_kg_per_zone_per_year": 0.5740281187969423,
       "label_nutrient_fraction": 0.13266921397379913,
       "tree_count": 6,
-      "product_kg_per_zone_per_year": 1.0167890792201586,
-      "product_kg_per_palm_per_year": 0.1694648465366931
+      "product_kg_per_zone_per_year": 4.326762039234718,
+      "product_kg_per_palm_per_year": 0.7211270065391197,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 4,
       "product": "ZA_N_cheaper",
       "nutrient": "N",
-      "elemental_nutrient_kg_per_zone_per_year": 0.8890912794548094,
+      "elemental_nutrient_kg_per_zone_per_year": 3.78336714661621,
       "label_nutrient_fraction": 0.21,
       "tree_count": 6,
-      "product_kg_per_zone_per_year": 4.233767997403854,
-      "product_kg_per_palm_per_year": 0.705627999567309
+      "product_kg_per_zone_per_year": 18.01603403150576,
+      "product_kg_per_palm_per_year": 3.0026723385842935,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 4,
       "product": "urea_N_expensive",
       "nutrient": "N",
-      "elemental_nutrient_kg_per_zone_per_year": 0.8890912794548094,
+      "elemental_nutrient_kg_per_zone_per_year": 3.78336714661621,
       "label_nutrient_fraction": 0.46,
       "tree_count": 6,
-      "product_kg_per_zone_per_year": 1.9328071292495854,
-      "product_kg_per_palm_per_year": 0.32213452154159755
+      "product_kg_per_zone_per_year": 8.224711188296109,
+      "product_kg_per_palm_per_year": 1.3707851980493515,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 5,
       "product": "kieserite_Mg_expensive",
       "nutrient": "Mg",
-      "elemental_nutrient_kg_per_zone_per_year": 0.26034125206331266,
+      "elemental_nutrient_kg_per_zone_per_year": 1.1078351151630326,
       "label_nutrient_fraction": 0.15377567983326718,
       "tree_count": 9,
-      "product_kg_per_zone_per_year": 1.6929936667852177,
-      "product_kg_per_palm_per_year": 0.18811040742057974
+      "product_kg_per_zone_per_year": 7.204228369298799,
+      "product_kg_per_palm_per_year": 0.8004698188109777,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 5,
       "product": "dolomite_Mg_cheaper",
       "nutrient": "Mg",
-      "elemental_nutrient_kg_per_zone_per_year": 0.26034125206331266,
+      "elemental_nutrient_kg_per_zone_per_year": 1.1078351151630326,
       "label_nutrient_fraction": 0.13266921397379913,
       "tree_count": 9,
-      "product_kg_per_zone_per_year": 1.9623335683192296,
-      "product_kg_per_palm_per_year": 0.21803706314658106
+      "product_kg_per_zone_per_year": 8.350355609869062,
+      "product_kg_per_palm_per_year": 0.9278172899854513,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 5,
       "product": "ZA_N_cheaper",
       "nutrient": "N",
-      "elemental_nutrient_kg_per_zone_per_year": 1.7158855249627425,
+      "elemental_nutrient_kg_per_zone_per_year": 7.301640531756351,
       "label_nutrient_fraction": 0.21,
       "tree_count": 9,
-      "product_kg_per_zone_per_year": 8.170883452203537,
-      "product_kg_per_palm_per_year": 0.9078759391337263
+      "product_kg_per_zone_per_year": 34.769716817887385,
+      "product_kg_per_palm_per_year": 3.863301868654154,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 5,
       "product": "urea_N_expensive",
       "nutrient": "N",
-      "elemental_nutrient_kg_per_zone_per_year": 1.7158855249627425,
+      "elemental_nutrient_kg_per_zone_per_year": 7.301640531756351,
       "label_nutrient_fraction": 0.46,
       "tree_count": 9,
-      "product_kg_per_zone_per_year": 3.7301859238320487,
-      "product_kg_per_palm_per_year": 0.4144651026480054
+      "product_kg_per_zone_per_year": 15.873131590774674,
+      "product_kg_per_palm_per_year": 1.7636812878638528,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 6,
@@ -2109,7 +2278,10 @@
       "label_nutrient_fraction": 0.15377567983326718,
       "tree_count": 8,
       "product_kg_per_zone_per_year": 0.0,
-      "product_kg_per_palm_per_year": 0.0
+      "product_kg_per_palm_per_year": 0.0,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 6,
@@ -2119,7 +2291,10 @@
       "label_nutrient_fraction": 0.13266921397379913,
       "tree_count": 8,
       "product_kg_per_zone_per_year": 0.0,
-      "product_kg_per_palm_per_year": 0.0
+      "product_kg_per_palm_per_year": 0.0,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 6,
@@ -2129,7 +2304,10 @@
       "label_nutrient_fraction": 0.21,
       "tree_count": 8,
       "product_kg_per_zone_per_year": 0.0,
-      "product_kg_per_palm_per_year": 0.0
+      "product_kg_per_palm_per_year": 0.0,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     },
     {
       "zone_id": 6,
@@ -2139,7 +2317,10 @@
       "label_nutrient_fraction": 0.46,
       "tree_count": 8,
       "product_kg_per_zone_per_year": 0.0,
-      "product_kg_per_palm_per_year": 0.0
+      "product_kg_per_palm_per_year": 0.0,
+      "base_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_zone_per_year": null,
+      "base_plus_supplement_product_kg_per_palm_per_year": null
     }
   ]
 }
