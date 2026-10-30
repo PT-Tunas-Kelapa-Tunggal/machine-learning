@@ -1,6 +1,10 @@
 .DS_Store
 .ipynb_checkpoints/
 __pycache__/
+.venv/
+.build/
+*.tar.gz
+*.sha256
 
 # Secrets: WeatherKit keys and the plot's coordinates
 .env
@@ -20,3 +24,13 @@ vari-confidence/outputs/
 s2-feasibility/data/private/
 s2-feasibility/data/cache/
 s2-feasibility/outputs/
+
+# Integration notebook: generated images, crops, CSV and JSON
+integration/oil_palm_*
+
+# Python packaging: build metadata from pip install -e
+*.egg-info/
+build/
+
+# krops_vari: weather cache (climate per NASA POWER cell) and API uploads/results
+integration/data/

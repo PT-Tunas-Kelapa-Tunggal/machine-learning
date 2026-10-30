@@ -1,0 +1,27 @@
+# integration.ipynb: segmentation → VARI per tree and zone → zone fertilizer boost.
+# macOS only (Core ML prediction runs on macOS):
+#   conda create -n vari-confidence python=3.12 && conda activate vari-confidence
+#   pip install -r requirements.txt
+
+# Segmentation, tree detection, VARI and the figures
+coremltools
+opencv-python
+numpy
+pillow
+matplotlib
+
+# weather_fertilizer.ipynb: WeatherKit and NASA POWER through ../weather (credentials in weather/.env)
+requests
+pyjwt
+cryptography
+pandas
+python-dotenv
+
+# krops_vari HTTP API (also: pip install -e "integration[api]")
+fastapi
+uvicorn
+python-multipart
+
+# Notebook
+jupyterlab
+ipykernel
