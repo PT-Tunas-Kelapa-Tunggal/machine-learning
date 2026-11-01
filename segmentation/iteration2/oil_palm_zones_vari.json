@@ -16,6 +16,8 @@
     "zone_mean_vari_percentile_rank_definition": "100 × number of valid zone means less than or equal to this zone mean ÷ number of valid zones; empirical rank within this image only",
     "fertilizer_boost_formula": "Additional nutrient supplement: Mg_i=Bi*Mg_max; N_i=Bi*N_max; annual zone supplement kg=annual supplement kg/ha*zone area ha",
     "reference_zone_mean_vari": 0.2414030283689499,
+    "lowest_zone_min_vari_value": -0.18285714089870453,
+    "lowest_zone_min_vari_flag_definition": "Each zone tied for the lowest finite min_vari is flagged for review; this is an image-screening cue, not a diagnosis.",
     "zone_confidence_default": 0.6,
     "max_nutrient_targets_kg_ha_per_year": {
       "Mg": 13.0,
@@ -98,7 +100,10 @@
         "std_vari": 0.11043073236942291,
         "mad_vari": 0.0649801641702652,
         "min_vari": -0.18285714089870453,
-        "max_vari": 1.0
+        "max_vari": 1.0,
+        "lowest_min_vari_zone": true,
+        "lowest_zone_min_vari_value": -0.18285714089870453,
+        "min_vari_review_note": "Zone has the lowest valid min VARI; review imagery/trees/pixels."
       },
       "trees": [
         {
@@ -398,7 +403,10 @@
         "std_vari": 0.12448650598526001,
         "mad_vari": 0.0712418407201767,
         "min_vari": -0.09693877398967743,
-        "max_vari": 1.6818181276321411
+        "max_vari": 1.6818181276321411,
+        "lowest_min_vari_zone": false,
+        "lowest_zone_min_vari_value": -0.18285714089870453,
+        "min_vari_review_note": null
       },
       "trees": [
         {
@@ -752,7 +760,10 @@
         "std_vari": 0.12301582098007202,
         "mad_vari": 0.07518798112869263,
         "min_vari": -0.11450381577014923,
-        "max_vari": 1.4482758045196533
+        "max_vari": 1.4482758045196533,
+        "lowest_min_vari_zone": false,
+        "lowest_zone_min_vari_value": -0.18285714089870453,
+        "min_vari_review_note": null
       },
       "trees": [
         {
@@ -1079,7 +1090,10 @@
         "std_vari": 0.11534550040960312,
         "mad_vari": 0.06956415623426437,
         "min_vari": -0.10232558101415634,
-        "max_vari": 1.4210525751113892
+        "max_vari": 1.4210525751113892,
+        "lowest_min_vari_zone": false,
+        "lowest_zone_min_vari_value": -0.18285714089870453,
+        "min_vari_review_note": null
       },
       "trees": [
         {
@@ -1352,7 +1366,10 @@
         "std_vari": 0.11605682969093323,
         "mad_vari": 0.07263033092021942,
         "min_vari": -0.10526315867900848,
-        "max_vari": 1.7000000476837158
+        "max_vari": 1.7000000476837158,
+        "lowest_min_vari_zone": false,
+        "lowest_zone_min_vari_value": -0.18285714089870453,
+        "min_vari_review_note": null
       },
       "trees": [
         {
@@ -1706,7 +1723,10 @@
         "std_vari": 0.1391468048095703,
         "mad_vari": 0.08555464446544647,
         "min_vari": -0.1267605572938919,
-        "max_vari": 1.2692307233810425
+        "max_vari": 1.2692307233810425,
+        "lowest_min_vari_zone": false,
+        "lowest_zone_min_vari_value": -0.18285714089870453,
+        "min_vari_review_note": null
       },
       "trees": [
         {
