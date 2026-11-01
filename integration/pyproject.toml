@@ -18,9 +18,6 @@ dependencies = [
     "python-dotenv",
 ]
 
-[project.optional-dependencies]
-api = ["fastapi", "uvicorn", "python-multipart"]
-
 [project.scripts]
 krops-vari = "krops_vari.main:main"
 
