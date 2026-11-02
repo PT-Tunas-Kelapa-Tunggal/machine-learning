@@ -1,0 +1,39 @@
+{
+  "farm": {
+    "name": "Kebun Pak Sutrisno",
+    "areaHa": 1.0,
+    "perimeterM": 800,
+    "year": 2016,
+    "soil": "Mineral"
+  },
+  "month": 10,
+  "fertilizerHistory": {
+    "freq": 2,
+    "fertilizers": [
+      {
+        "name": "Dolomite",
+        "bagKg": 50,
+        "id": "A01C2E47-5D6B-4B95-9D31-6A1C8217D045",
+        "dosePerTree": 1.0,
+        "bags": 6
+      },
+      {
+        "name": "NPK",
+        "composition": {
+          "N": 15,
+          "P": 15,
+          "K": 15,
+          "Mg": 0
+        },
+        "bagKg": 50,
+        "id": "D828E19B-7B72-4E11-A35D-B1B7D2F9C304",
+        "dosePerTree": 2,
+        "bags": 6
+      }
+    ]
+  },
+  "harvest": {
+    "freq": 2,
+    "weightKg": 800
+  }
+}
