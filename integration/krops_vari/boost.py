@@ -8,6 +8,8 @@
 """
 import numpy as np
 
+MG_TO_MGO_FACTOR = 40.304 / 24.305
+
 
 def _valid_mean(zone):
     mean = zone.get("vari", {}).get("mean_vari")
@@ -45,6 +47,16 @@ def add_zone_boost_and_fertilizer(zone_json, settings, confidence_by_id, referen
     cutoff = settings.min_p95_p25_vari_gap_for_blanket_boost
     blanket_mode = gap is not None and gap <= cutoff
     areas = load_zone_areas(settings)
+
+    # Iteration 2: lowest min VARI diagnostics
+    valid_mins = [z["vari"].get("min_vari") for z in zone_json
+                  if z.get("vari", {}).get("min_vari") is not None
+                  and np.isfinite(z["vari"]["min_vari"])]
+    lowest_zone_min_vari = min(valid_mins) if valid_mins else None
+
+    lowest_zone_mean_vari = min(valid_means) if valid_means else None
+
+    total_detected_trees = sum(z.get("tree_count", 0) for z in zone_json)
     for nutrient, rate in settings.max_nutrient_kg_ha_per_year.items():
         if nutrient not in ("Mg", "N") or not np.isfinite(float(rate)) or float(rate) < 0:
             raise ValueError(f"Maximum annual elemental nutrient target for {nutrient} must be nonnegative.")
@@ -54,6 +66,31 @@ def add_zone_boost_and_fertilizer(zone_json, settings, confidence_by_id, referen
             raise ValueError(f"Product price for {product} must be nonnegative.")
     for zone in zone_json:
         zid = str(zone["zone_id"])
+        if settings.include_iteration2_fields:
+            zone_min = zone.get("vari", {}).get("min_vari")
+            is_lowest_min = (
+                zone_min is not None
+                and np.isfinite(zone_min)
+                and lowest_zone_min_vari is not None
+                and np.isclose(zone_min, lowest_zone_min_vari, rtol=0.0, atol=1e-12)
+            )
+            zone_mean_val = zone.get("vari", {}).get("mean_vari")
+            is_lowest_mean = (
+                zone_mean_val is not None
+                and np.isfinite(zone_mean_val)
+                and lowest_zone_mean_vari is not None
+                and np.isclose(zone_mean_val, lowest_zone_mean_vari, rtol=0.0, atol=1e-12)
+            )
+            zone["vari"]["lowest_min_vari_zone"] = bool(is_lowest_min)
+            zone["vari"]["lowest_zone_min_vari_value"] = (
+                float(lowest_zone_min_vari) if lowest_zone_min_vari is not None else None
+            )
+            zone["vari"]["min_vari_review_note"] = (
+                "Zone has the lowest valid min VARI; review imagery/trees for non-canopy pixels, shade, or stress."
+                if is_lowest_min else None
+            )
+            zone["vari"]["lowest_mean_vari_zone"] = bool(is_lowest_mean)
+
         confidence = float(confidence_by_id.get(zone["zone_id"], confidence_by_id.get(zid, settings.default_zone_confidence)))
         if not np.isfinite(confidence) or not 0.10 <= confidence <= 1.0:
             raise ValueError(f"Confidence for zone {zid} must be in the range 0.10 to 1.0.")
@@ -72,17 +109,30 @@ def add_zone_boost_and_fertilizer(zone_json, settings, confidence_by_id, referen
             zone_specific_deficit = max(0.0, 1.0 - float(mean) / reference)
             zone_specific_boost = zone_specific_deficit * confidence
         spacing_area = (settings.use_spacing_based_zone_area_default and zid not in areas
-                        and settings.uniform_zone_area_ha is None)
+                        and settings.uniform_zone_area_ha is None and settings.total_farm_area_ha is None)
         if zid in areas:
             area = areas[zid]
+            area_note = "User-supplied area for this zone."
         elif settings.uniform_zone_area_ha is not None:
             area = float(settings.uniform_zone_area_ha)
+            area_note = "Configured uniform area applied to every zone."
+        elif settings.total_farm_area_ha is not None:
+            tree_count = max(0, int(zone.get("tree_count", 0)))
+            area = (float(settings.total_farm_area_ha) * tree_count / total_detected_trees
+                    if total_detected_trees > 0 else None)
+            area_note = (
+                "Total farm area split across zones in proportion to detected tree counts; "
+                "replace with measured zone areas when available."
+            )
         elif settings.use_spacing_based_zone_area_default:
             if settings.default_tree_spacing_m <= 0:
                 raise ValueError("default_tree_spacing_m must be positive.")
             area = zone.get("tree_count", 0) * (settings.default_tree_spacing_m ** 2) / 10000.0
+            area_note = ("Approximate area from detected tree count × spacing²; default spacing is 10 m (midpoint of "
+                         "9–11 m). Replace with measured zone areas when available.")
         else:
             area = None
+            area_note = "Provide zone ground area in hectares; pixel dimensions are not converted to area."
         recommendation = {
             "reference_zone_mean_vari": reference,
             "reference_zone_mean_vari_percentile": 95,
@@ -101,10 +151,11 @@ def add_zone_boost_and_fertilizer(zone_json, settings, confidence_by_id, referen
             "boost_fraction": boost,
             "zone_area_ha": area,
             "fertilizers": {},
-            "area_note": ("Approximate area from detected tree count × spacing²; default spacing is 10 m (midpoint of "
-                          "9–11 m). Replace with measured zone areas when available." if spacing_area
-                          else (None if area is not None
-                                else "Provide zone ground area in hectares; pixel dimensions are not converted to area.")),
+            "area_note": area_note if settings.include_iteration2_fields else (
+                "Approximate area from detected tree count × spacing²; default spacing is 10 m (midpoint of "
+                "9–11 m). Replace with measured zone areas when available." if spacing_area
+                else (None if area is not None
+                      else "Provide zone ground area in hectares; pixel dimensions are not converted to area.")),
         }
         for product, nutrient in settings.fertilizer_nutrient_by_product.items():
             max_rate = settings.max_nutrient_kg_ha_per_year.get(nutrient)
@@ -147,18 +198,62 @@ def product_mass_rows(zone_json, settings):
                 fraction = float(fraction)
                 if not np.isfinite(fraction) or not 0 < fraction <= 1:
                     raise ValueError(f"Product nutrient fraction for {product} must be greater than 0 and at most 1.")
-            product_total = nutrient_total / fraction if nutrient_total is not None and fraction is not None else None
+            label_info = settings.fertilizer_product_label_fractions.get(product, {})
+            label_basis = label_info.get("basis")
+            label_fraction = label_info.get("fraction")
+            if label_fraction is not None:
+                label_fraction = float(label_fraction)
+
+            if nutrient_total is None or fraction is None:
+                product_total = None
+            elif nutrient == "Mg" and label_basis == "MgO" and label_fraction is not None:
+                mgo_target = nutrient_total * MG_TO_MGO_FACTOR
+                product_total = mgo_target / label_fraction
+            else:
+                product_total = nutrient_total / fraction
+
             per_palm = (product_total / zone["tree_count"]
                         if product_total is not None and zone.get("tree_count", 0) > 0 else None)
             price = settings.fertilizer_price_per_kg.get(product)
-            rows.append({
-                "zone_id": zone["zone_id"], "product": product, "nutrient": nutrient,
-                "elemental_nutrient_kg_per_zone_per_year": nutrient_total,
-                "label_nutrient_fraction": fraction, "tree_count": zone.get("tree_count"),
-                "product_kg_per_zone_per_year": product_total,
-                "product_kg_per_palm_per_year": per_palm,
-                **({"price_per_kg_product": float(price),
-                    "annual_product_cost": product_total * float(price) if product_total is not None else None}
-                   if price is not None else {}),
-            })
+
+            base_product_total = None
+            combined_product_total = None
+            combined_per_palm = None
+            base_rate = settings.fertilizer_base_product_kg_per_palm_per_year.get(product)
+            if base_rate is not None:
+                base_product_total = float(base_rate) * zone.get("tree_count", 0)
+                combined_product_total = (base_product_total + product_total
+                                          if product_total is not None else None)
+                combined_per_palm = (
+                    combined_product_total / zone["tree_count"]
+                    if combined_product_total is not None and zone.get("tree_count", 0) > 0 else None
+                )
+
+            if settings.include_iteration2_fields:
+                row = {
+                    "zone_id": zone["zone_id"], "product": product, "nutrient": nutrient,
+                    "elemental_nutrient_kg_per_zone_per_year": nutrient_total,
+                    "product_label_basis": label_basis,
+                    "product_label_fraction": label_fraction,
+                    "elemental_nutrient_fraction_per_kg_product": fraction,
+                    "tree_count": zone.get("tree_count"),
+                    "product_kg_per_zone_per_year": product_total,
+                    "product_kg_per_palm_per_year": per_palm,
+                    "base_product_kg_per_zone_per_year": base_product_total,
+                    "base_plus_supplement_product_kg_per_zone_per_year": combined_product_total,
+                    "base_plus_supplement_product_kg_per_palm_per_year": combined_per_palm,
+                }
+            else:
+                row = {
+                    "zone_id": zone["zone_id"], "product": product, "nutrient": nutrient,
+                    "elemental_nutrient_kg_per_zone_per_year": nutrient_total,
+                    "label_nutrient_fraction": fraction, "tree_count": zone.get("tree_count"),
+                    "product_kg_per_zone_per_year": product_total,
+                    "product_kg_per_palm_per_year": per_palm,
+                }
+
+            if price is not None:
+                row["price_per_kg_product"] = float(price)
+                row["annual_product_cost"] = product_total * float(price) if product_total is not None else None
+            rows.append(row)
     return rows

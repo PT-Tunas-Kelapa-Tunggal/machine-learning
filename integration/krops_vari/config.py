@@ -26,7 +26,9 @@ def _resolve_model_path() -> Path:
 
 
 DEFAULT_MODEL_PATH = _resolve_model_path()
+V2_MODEL_PATH = REPO / "segmentation" / "iteration2" / "krops_model_v0.2_yolo26l.mlpackage"
 MG_PER_MGO = 24.305 / 40.304
+MGO_PER_MG = 40.304 / 24.305
 
 
 @dataclass
@@ -62,8 +64,43 @@ class Settings:
     fertilizer_price_per_kg: dict = field(default_factory=dict)
     zone_area_ha_by_id: dict = field(default_factory=dict)
     uniform_zone_area_ha: float | None = None
+    total_farm_area_ha: float | None = None
     default_tree_spacing_m: float = 10.0       # midpoint of 9–11 m: 0.01 ha per palm
     use_spacing_based_zone_area_default: bool = True
+
+    # ---- base product rates and label guarantees (iteration 2)
+    fertilizer_base_product_kg_per_palm_per_year: dict = field(default_factory=dict)
+    fertilizer_product_label_fractions: dict = field(default_factory=lambda: {
+        "kieserite_Mg_expensive": {"basis": "MgO", "fraction": 0.255},
+        "dolomite_Mg_cheaper": {"basis": "MgO", "fraction": 0.22},
+        "ZA_N_cheaper": {"basis": "N", "fraction": 0.21},
+        "urea_N_expensive": {"basis": "N", "fraction": 0.46},
+    })
+
+    # ---- Part 2 NPK comparison and baseline targets (iteration 2)
+    nutrient_match_tolerance_percent: float = 5.0
+    npk_gap_route_threshold_percent: float = 30.0
+    baseline_elemental_kg_ha_year: dict = field(default_factory=lambda: {
+        "N": 90.00, "P": 10.00, "K": 111.00, "Mg": 13.00,
+    })
+    standalone_mg_products: dict = field(default_factory=lambda: {
+        "Kieserite": {"mgo_fraction": 0.255, "bag_size_kg": 50.0},
+        "Dolomite": {"mgo_fraction": 0.22, "bag_size_kg": 50.0},
+    })
+    standalone_p_products: dict = field(default_factory=lambda: {
+        "SP-36": {"oxide_fraction": 0.36, "bag_size_kg": 50.0},
+    })
+    standalone_k_products: dict = field(default_factory=lambda: {
+        "KCl / MOP": {"oxide_fraction": 0.60, "bag_size_kg": 50.0},
+    })
+    standalone_n_products: dict = field(default_factory=lambda: {
+        "ZA": {"n_fraction": 0.21, "bag_size_kg": 50.0},
+        "Urea": {"n_fraction": 0.46, "bag_size_kg": 50.0},
+    })
+    alternative_npk_products: dict = field(default_factory=lambda: {
+        "Reference-style 12-6-22-3": "12-6-22-3",
+    })
+    include_iteration2_fields: bool = False
 
     # ---- zone confidence (team decisions, 23 Oct 2026)
     zone_confidence_by_id: dict = field(default_factory=dict)  # explicit per-zone values; empty = computed

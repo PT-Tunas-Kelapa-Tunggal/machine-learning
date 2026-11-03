@@ -14,7 +14,7 @@ import logging
 import sys
 from pathlib import Path
 
-from .config import REPO, Settings
+from .config import REPO, Settings, V2_MODEL_PATH
 from .pipeline import run_scan
 
 DEFAULT_CACHE = REPO / "integration" / "data" / "weather_cache"
@@ -34,6 +34,10 @@ def parse_args(argv):
     parser.add_argument("--flight-end", help="landing, UTC ISO")
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE, help="climate cache per NASA POWER cell")
     parser.add_argument("--no-weatherkit", action="store_true", help="NASA POWER only (P30 fallback, no forecast)")
+    parser.add_argument("--submission", type=Path,
+                        help="path to user_submission_request.json (farm profile, fertilizer history, harvest)")
+    parser.add_argument("--model", type=Path,
+                        help="override path to the Core ML model .mlpackage")
     args = parser.parse_args(argv)
     if not args.check and not args.photo:
         parser.error("--photo is required unless --check is specified")
@@ -52,6 +56,11 @@ def main(argv=None):
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     settings = Settings.from_json(args.settings) if args.settings else Settings()
+
+    if args.model:
+        settings.model_path = str(args.model)
+    elif args.submission and V2_MODEL_PATH.exists() and not args.settings:
+        settings.model_path = str(V2_MODEL_PATH)
 
     if args.check:
         if not Path(settings.model_path).exists():
@@ -73,11 +82,20 @@ def main(argv=None):
 
         plot = find_plot(args.plots, args.plot_id)
         weather = WeatherClient(args.cache_dir, use_weatherkit=not args.no_weatherkit)
-    result = run_scan(args.photo, settings, scan_id=args.scan_id, plot=plot, flight=flight, weather=weather)
+
+    submission_data = None
+    if args.submission:
+        sub_path = Path(args.submission)
+        if not sub_path.is_file():
+            raise SystemExit(f"submission file not found: {sub_path}")
+        submission_data = json.loads(sub_path.read_text(encoding="utf-8"))
+
+    result = run_scan(args.photo, settings, scan_id=args.scan_id, plot=plot, flight=flight, weather=weather,
+                      submission=submission_data)
     text = json.dumps(result, indent=1, ensure_ascii=False)
     if args.out:
         args.out.write_text(text)
-        plan = result["spreading"]
+        plan = result.get("spreading")
         print(f"{args.out}: {result['image']['trees']} trees, {len(result['zones'])} zones"
               + (f", L8 {plan['l8']['state']}" if plan else ""), file=sys.stderr)
     else:

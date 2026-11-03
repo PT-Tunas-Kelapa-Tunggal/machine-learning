@@ -14,6 +14,14 @@ import cv2
 
 from . import __version__
 from .boost import add_zone_boost_and_fertilizer, product_mass_rows
+from .comparison import (
+    base_product_rates_from_history,
+    build_field_npk_json_record,
+    build_recorded_fertilizer_history_supply,
+    build_ui_data,
+    build_zone_boost_json_records,
+    parse_analysis,
+)
 from .confidence import zone_confidence
 from .config import Settings
 from .detection import Detector
@@ -103,15 +111,28 @@ def _weather_failed(run_flags, what, error):
 
 
 def run_scan(photo, settings=None, *, detector=None, scan_id=None, plot=None, flight=None, weather=None, today=None,
-             computed_at=None):
+             computed_at=None, submission=None):
     """The full result for one photo. Pass a loaded `detector` to reuse the model across scans (the API does).
 
     With `weather` (a WeatherClient) and `plot` ({"plot_id", "lat", "lon"}, kept on the server) the result adds the
     spreading plan; with `flight` ({"flight_start", "flight_end"} in UTC) also the L6 flight confidence, which then
     replaces DEFAULT_ZONE_CONFIDENCE as the flight part of every zone's confidence. Without them the result equals
     integration.ipynb's. A weather failure never stops the scan: it becomes a run flag.
+
+    With `submission` (parsed user_submission_request.json dict), the result incorporates farm profile area,
+    historical base fertilizer doses, field-wide NPK baseline comparison, and app-facing ui_data.
     """
     settings = settings or Settings()
+
+    if submission is not None:
+        settings.include_iteration2_fields = True
+        farm = submission.get("farm") or {}
+        if farm.get("areaHa") is not None and settings.total_farm_area_ha is None:
+            settings.total_farm_area_ha = float(farm["areaHa"])
+        base_rates, _ = base_product_rates_from_history(submission)
+        if not settings.fertilizer_base_product_kg_per_palm_per_year:
+            settings.fertilizer_base_product_kg_per_palm_per_year = base_rates
+
     detector = detector or Detector(settings.model_path)
     today = today or datetime.now(TZ).date()
     run_flags, climate, flight_result = [], None, None
@@ -151,7 +172,8 @@ def run_scan(photo, settings=None, *, detector=None, scan_id=None, plot=None, fl
             plan = spreading_plan(products, stage_a, l8, p30, today, settings)
         except Exception as error:  # noqa: BLE001
             _weather_failed(run_flags, "spreading plan (L5/L8)", error)
-    return {
+
+    result = {
         "schema": SCHEMA_VERSION,
         "package_version": __version__,
         "scan_id": scan_id,
@@ -165,3 +187,62 @@ def run_scan(photo, settings=None, *, detector=None, scan_id=None, plot=None, fl
         "run_flags": run_flags,
         "settings": {k: v for k, v in settings.to_dict().items() if k != "model_path"},
     }
+
+    if submission is not None:
+        tree_count = counts.get("trees", sum(int(z.get("tree_count", 0)) for z in zone_json))
+        farm_area_ha = float(settings.total_farm_area_ha or 1.0)
+        fertilizer_history = submission.get("fertilizerHistory") or {}
+        history_freq = fertilizer_history.get("freq")
+        entries = fertilizer_history.get("fertilizers", [])
+        npk_entry = next((item for item in entries if str(item.get("name", "")).strip().upper() == "NPK"), None)
+
+        user_analysis_str = "12-12-12"
+        bag_size_kg = 50.0
+        dose_per_tree = None
+        apps_per_year = None
+        bags_per_ha_year = 0.0
+
+        if npk_entry is not None:
+            comp = npk_entry.get("composition") or {}
+            if all(k in comp for k in ("N", "P", "K", "Mg")):
+                user_analysis_str = "-".join(str(comp[k]) for k in ("N", "P", "K", "Mg"))
+            bag_size_kg = float(npk_entry.get("bagKg", bag_size_kg))
+            if npk_entry.get("dosePerTree") is not None and history_freq is not None:
+                dose_per_tree = float(npk_entry["dosePerTree"])
+                apps_per_year = float(history_freq)
+                annual_product_kg_farm = dose_per_tree * apps_per_year * tree_count
+                annual_product_kg_ha = annual_product_kg_farm / farm_area_ha if farm_area_ha > 0 else 0.0
+                bags_per_ha_year = annual_product_kg_ha / bag_size_kg if bag_size_kg > 0 else 0.0
+
+        analysis = parse_analysis(user_analysis_str)
+        history_supply = build_recorded_fertilizer_history_supply(submission, tree_count, farm_area_ha)
+        field_npk_record = build_field_npk_json_record(
+            label_percent=analysis,
+            bags_per_ha_year=bags_per_ha_year,
+            bag_size_kg=bag_size_kg,
+            history_supply=history_supply,
+            baseline_elemental=settings.baseline_elemental_kg_ha_year,
+            dose_per_tree=dose_per_tree,
+            applications_per_year=apps_per_year,
+            tree_count=tree_count,
+            farm_area_ha=farm_area_ha,
+            route_threshold_percent=settings.npk_gap_route_threshold_percent,
+        )
+        zone_boost_records = build_zone_boost_json_records(zone_json)
+        result["combined_fertilizer_calculations"] = {
+            "field_wide_npk_baseline_comparison": field_npk_record,
+            "zone_vari_boost_calculations": zone_boost_records,
+            "scope_note": (
+                "Field-wide standalone top-ups close the configured NPK baseline gap. Zone VARI boosts are separate "
+                "additional zone calculations already derived from confidence, VARI, zone area, and configured Mg/N rates. "
+                "They are stored together here for review but are not automatically added or netted against each other; "
+                "check for overlap before deciding field application quantities."
+            ),
+        }
+        result["ui_data"] = build_ui_data(
+            submission,
+            result,
+            image_name=Path(photo).name if isinstance(photo, (str, Path)) else None,
+        )
+
+    return result
