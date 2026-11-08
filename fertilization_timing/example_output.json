@@ -1,0 +1,271 @@
+{
+ "schema_version": "1.0",
+ "farm_name": "Belakang Rumah",
+ "plan_year": 2027,
+ "today": "2026-11-08",
+ "rounds_per_year": 3,
+ "rounds": [
+  {
+   "round": 1,
+   "start_month": 1,
+   "start_month_name": "Januari",
+   "end_month": 2,
+   "end_month_name": "Februari",
+   "start_date": "2027-01-01",
+   "end_date": "2027-02-28",
+   "status": "upcoming",
+   "days_until_start": 54,
+   "day_of_round": null,
+   "total_days": 59,
+   "card": {
+    "state": "upcoming",
+    "days_until_start": 54
+   },
+   "daily": null,
+   "steps": [
+    {
+     "step": 1,
+     "fertilizer_id": "A01C2E47-5D6B-4B95-9D31-6A1C8217D045",
+     "name": "Dolomite",
+     "display_name": "Dolomit",
+     "dose_kg": 7.333333333333333,
+     "annual_dose_kg": 22.0,
+     "bag_kg": 50,
+     "wait_after_days": {
+      "min": 14,
+      "max": 28,
+      "state": "idle",
+      "until": null
+     },
+     "card": {
+      "state": "locked"
+     }
+    },
+    {
+     "step": 2,
+     "fertilizer_id": "D828E19B-7B72-4E11-A35D-B1B7D2F9C304",
+     "name": "NPK",
+     "display_name": "NPK 15-15-15",
+     "dose_kg": 8.0,
+     "annual_dose_kg": 24.0,
+     "bag_kg": 50,
+     "wait_after_days": null,
+     "card": {
+      "state": "locked"
+     }
+    }
+   ]
+  },
+  {
+   "round": 2,
+   "start_month": 5,
+   "start_month_name": "Mei",
+   "end_month": 6,
+   "end_month_name": "Juni",
+   "start_date": "2027-05-01",
+   "end_date": "2027-06-30",
+   "status": "upcoming",
+   "days_until_start": 174,
+   "day_of_round": null,
+   "total_days": 61,
+   "card": {
+    "state": "upcoming",
+    "days_until_start": 174
+   },
+   "daily": null,
+   "steps": [
+    {
+     "step": 1,
+     "fertilizer_id": "A01C2E47-5D6B-4B95-9D31-6A1C8217D045",
+     "name": "Dolomite",
+     "display_name": "Dolomit",
+     "dose_kg": 7.333333333333333,
+     "annual_dose_kg": 22.0,
+     "bag_kg": 50,
+     "wait_after_days": {
+      "min": 14,
+      "max": 28,
+      "state": "idle",
+      "until": null
+     },
+     "card": {
+      "state": "locked"
+     }
+    },
+    {
+     "step": 2,
+     "fertilizer_id": "D828E19B-7B72-4E11-A35D-B1B7D2F9C304",
+     "name": "NPK",
+     "display_name": "NPK 15-15-15",
+     "dose_kg": 8.0,
+     "annual_dose_kg": 24.0,
+     "bag_kg": 50,
+     "wait_after_days": null,
+     "card": {
+      "state": "locked"
+     }
+    }
+   ]
+  },
+  {
+   "round": 3,
+   "start_month": 9,
+   "start_month_name": "September",
+   "end_month": 10,
+   "end_month_name": "Oktober",
+   "start_date": "2027-09-01",
+   "end_date": "2027-10-31",
+   "status": "upcoming",
+   "days_until_start": 297,
+   "day_of_round": null,
+   "total_days": 61,
+   "card": {
+    "state": "upcoming",
+    "days_until_start": 297
+   },
+   "daily": null,
+   "steps": [
+    {
+     "step": 1,
+     "fertilizer_id": "A01C2E47-5D6B-4B95-9D31-6A1C8217D045",
+     "name": "Dolomite",
+     "display_name": "Dolomit",
+     "dose_kg": 7.333333333333333,
+     "annual_dose_kg": 22.0,
+     "bag_kg": 50,
+     "wait_after_days": {
+      "min": 14,
+      "max": 28,
+      "state": "idle",
+      "until": null
+     },
+     "card": {
+      "state": "locked"
+     }
+    },
+    {
+     "step": 2,
+     "fertilizer_id": "D828E19B-7B72-4E11-A35D-B1B7D2F9C304",
+     "name": "NPK",
+     "display_name": "NPK 15-15-15",
+     "dose_kg": 8.0,
+     "annual_dose_kg": 24.0,
+     "bag_kg": 50,
+     "wait_after_days": null,
+     "card": {
+      "state": "locked"
+     }
+    }
+   ]
+  }
+ ],
+ "weather_basis": {
+  "rule": "L8 Stage A: a month is open when its average rain is 100–300 mm (weather/krops_rules.py); rounds go in open months 4 months apart, the set with the highest in-band (100–200 mm) share",
+  "period": [
+   1991,
+   2020
+  ],
+  "months": {
+   "1": {
+    "name": "Januari",
+    "avg_mm": 215.7,
+    "in_band_share": 0.4,
+    "gate": "open"
+   },
+   "2": {
+    "name": "Februari",
+    "avg_mm": 107.9,
+    "in_band_share": 0.367,
+    "gate": "open"
+   },
+   "3": {
+    "name": "Maret",
+    "avg_mm": 171.5,
+    "in_band_share": 0.367,
+    "gate": "open"
+   },
+   "4": {
+    "name": "April",
+    "avg_mm": 205.4,
+    "in_band_share": 0.433,
+    "gate": "open"
+   },
+   "5": {
+    "name": "Mei",
+    "avg_mm": 207.1,
+    "in_band_share": 0.4,
+    "gate": "open"
+   },
+   "6": {
+    "name": "Juni",
+    "avg_mm": 174.5,
+    "in_band_share": 0.7,
+    "gate": "open"
+   },
+   "7": {
+    "name": "Juli",
+    "avg_mm": 172.5,
+    "in_band_share": 0.433,
+    "gate": "open"
+   },
+   "8": {
+    "name": "Agustus",
+    "avg_mm": 167.9,
+    "in_band_share": 0.567,
+    "gate": "open"
+   },
+   "9": {
+    "name": "September",
+    "avg_mm": 162.9,
+    "in_band_share": 0.6,
+    "gate": "open"
+   },
+   "10": {
+    "name": "Oktober",
+    "avg_mm": 209.7,
+    "in_band_share": 0.333,
+    "gate": "open"
+   },
+   "11": {
+    "name": "November",
+    "avg_mm": 298.8,
+    "in_band_share": 0.1,
+    "gate": "open"
+   },
+   "12": {
+    "name": "Desember",
+    "avg_mm": 318.7,
+    "in_band_share": 0.1,
+    "gate": "tunda"
+   }
+  },
+  "candidate_sets": [
+   {
+    "months": [
+     "Januari",
+     "Mei",
+     "September"
+    ],
+    "in_band_share": 1.4
+   },
+   {
+    "months": [
+     "Februari",
+     "Juni",
+     "Oktober"
+    ],
+    "in_band_share": 1.4
+   },
+   {
+    "months": [
+     "Maret",
+     "Juli",
+     "November"
+    ],
+    "in_band_share": 0.9
+   }
+  ],
+  "note": "climate averages (1991–2020) set the months; the days inside an active round's window come from the 10-day forecast (L8 Stage B) and P30 (L5), in that round's `daily`"
+ },
+ "flags": []
+}

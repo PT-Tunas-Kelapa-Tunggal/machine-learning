@@ -1,0 +1,46 @@
+{
+  "farm": {
+    "name": "Belakang Rumah",
+    "lat": 0.92,
+    "lon": 104.45
+  },
+  "fertilizerHistory": {
+    "freq": 3,
+    "fertilizers": [
+      {
+        "name": "Dolomite",
+        "bagKg": 50,
+        "id": "A01C2E47-5D6B-4B95-9D31-6A1C8217D045",
+        "overallDoseWeightInKg": 1200.0
+      },
+      {
+        "name": "NPK",
+        "composition": {
+          "N": 15,
+          "P": 15,
+          "K": 15,
+          "Mg": 0
+        },
+        "bagKg": 50,
+        "id": "D828E19B-7B72-4E11-A35D-B1B7D2F9C304",
+        "overallDoseWeightInKg": 360.0
+      },
+      {
+        "name": "Urea",
+        "bagKg": 50,
+        "id": "5F3B9C1A-2E7D-4C8B-A6F0-91D4E2B7C3A8",
+        "overallDoseWeightInKg": 300.0
+      }
+    ]
+  },
+  "applications": [
+    {
+      "fertilizerId": "A01C2E47-5D6B-4B95-9D31-6A1C8217D045",
+      "date": "2027-01-05"
+    },
+    {
+      "fertilizerId": "D828E19B-7B72-4E11-A35D-B1B7D2F9C304",
+      "date": "2027-01-19"
+    }
+  ]
+}
