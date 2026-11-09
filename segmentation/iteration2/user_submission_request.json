@@ -4,7 +4,9 @@
     "areaHa": 1.0,
     "perimeterM": 800,
     "year": 2016,
-    "soil": "Mineral"
+    "soil": "Mineral",
+    "latitude": null,
+    "longitude": null
   },
   "month": 10,
   "fertilizerHistory": {
@@ -26,7 +28,7 @@
         },
         "bagKg": 50,
         "id": "D828E19B-7B72-4E11-A35D-B1B7D2F9C304",
-        "dosePerTree": 2
+        "dosePerTree": 0.5
       }
     ]
   },
