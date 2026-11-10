@@ -6,7 +6,8 @@
     "year": 2016,
     "soil": "Mineral",
     "latitude": null,
-    "longitude": null
+    "longitude": null,
+    "plantingMonth": null
   },
   "month": 10,
   "fertilizerHistory": {
@@ -35,5 +36,6 @@
   "harvest": {
     "freq": 2,
     "weightKg": 800
-  }
+  },
+  "fertilizerBudgetRp": null
 }
