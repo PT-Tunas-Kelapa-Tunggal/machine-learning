@@ -12,27 +12,48 @@ under way or about to start, the day to spread each product or the reason to wai
 | `example_request_in_progress.json` | Dolomit + NPK + Urea (400 / 120 / 100 kg a round), Dolomit marked 5 Jan 2027, NPK 19 Jan |
 | `example_output_in_progress.json` | its output on 19 Jan 2027 with `--no-daily`: the card of image 8 (Urea "Bisa ditandai mulai 20 Januari") |
 | `test_fertilization_timing.py` | unit tests with a fixed climate table and made-up weather: no network |
+| `krops_rules.py` | the team's L5/L8 weather rules, a verbatim copy (see Copied from) |
+| `weather_sources.py` | NASA POWER climate and P30, WeatherKit forecast: the team's code, copied (see Copied from) |
+| `requirements.txt`, `.env.example` | what the weather needs: packages, WeatherKit keys |
 
-The weather rules are the team's, imported from `integration/krops_vari/` and `weather/`, not copied.
+The folder runs on its own: it imports nothing from the rest of the repo.
 
 ## Run
 
-The daily weather needs WeatherKit, which needs `pyjwt`, `cryptography` and `python-dotenv`, and the keys in
-`weather/.env` (`WK_TEAM_ID`, `WK_KEY_ID`, `WK_SERVICE_ID`, `WK_KEY_PATH`). The `krops-weather` conda environment has
-the packages (`weather/requirements.txt`).
+Python 3.9 or later. The schedule and the tests need only the standard library; the weather needs
+`requirements.txt`. For the daily weather, copy `.env.example` to `.env` and fill in the WeatherKit keys (or point
+`KROPS_WEATHER_ENV` to a `.env` elsewhere). Without them there is no forecast, which the flags say.
+The climate is cached in `data/weather_cache/` (not committed): on a fresh copy the first run fetches 30 years of
+NASA POWER rain for the plot's cell, once a year.
 
 ```bash
-conda activate krops-weather
-python integration/v2/fertilization_timing/fertilization_timing.py \
-    --request integration/v2/fertilization_timing/example_request.json \
+pip install -r requirements.txt
+python fertilization_timing.py --request example_request.json \
     [--today 2026-11-08] [--year 2027] [--no-daily] [--out schedule.json]
-python -m unittest discover -s integration/v2/fertilization_timing
+python -m unittest discover -s .
 ```
 
 - `--today`: the day to plan from (default: today in WIB). It sets the plan year, the status of each round and which
   round is active.
 - `--year`: force the plan year. Default: this year while one of its rounds hasn't ended, else next year.
 - `--no-daily`: no forecast or P30 calls; every `daily` stays `null`.
+- `--cache-dir`: where the climate is cached (default `data/weather_cache/` here).
+
+## Copied from
+
+The weather code is the team's, copied on 10 Nov 2026 (commit `f758e90`) so the folder runs on its own. Only the
+module prefixes (`job.`, `l2.`, `l6.`) were dropped; the code is otherwise unchanged.
+
+| Here | From |
+|---|---|
+| `krops_rules.py` | `weather/krops_rules.py`, whole and byte for byte. `CopiedRulesTest` fails when the two differ and is skipped outside the repo |
+| `weather_sources.py`: the grid cells, `fetch_nasa_power`, `WeatherKit` (without `hourly`), `build_climate`, `build_recent`, `load_climate`, `write_json` | `weather/nasa_power_job.py` |
+| `weather_sources.py`: `p30_at`, `scan_p30` | `weather/l2_scan_rain.py`, `weather/l6_vari_confidence.py` |
+| `weather_sources.py`: `WeatherClient` (without `flight_confidence`), `load_env` (reads `.env` here) | `integration/krops_vari/weather.py` |
+| `fertilization_timing.py`: `wait_reason`, `KIESERITE_WAIT_DAYS` | `integration/krops_vari/spreading.py`, `config.py` (`min_days_mg_to_n`) |
+
+When one of these changes upstream, copy it over again: `cp weather/krops_rules.py integration/v2/fertilization_timing/`,
+and the matching functions by hand for the rest.
 
 ## Datapoints
 
@@ -56,12 +77,12 @@ placed after NPK and before Urea/ZA, and flagged.
 
 | Data | Source | Used for | Calls | Cache |
 |---|---|---|---|---|
-| Monthly rain 1991–2020: average and in-band (100–200 mm) share per calendar month | NASA POWER daily `PRECTOTCORR`, grid cell 0.5° × 0.625° (free, no key) | L8 Stage A: which months are open, which months the rounds go in. Also the P30 check below | 1 per cell a year | `integration/data/weather_cache/cells/<cell>/climate.json`, 365 days |
-| 10-day daily rain forecast | Apple WeatherKit `forecastDaily` (keys in `weather/.env`) | L8 Stage B: the safe days of the active round | 1 per run with an active round | in memory only |
+| Monthly rain 1991–2020: average and in-band (100–200 mm) share per calendar month | NASA POWER daily `PRECTOTCORR`, grid cell 0.5° × 0.625° (free, no key) | L8 Stage A: which months are open, which months the rounds go in. Also the P30 check below | 1 per cell a year | `data/weather_cache/cells/<cell>/climate.json`, 365 days |
+| 10-day daily rain forecast | Apple WeatherKit `forecastDaily` (keys in `.env`) | L8 Stage B: the safe days of the active round | 1 per run with an active round | in memory only |
 | P30: rain of the last 30 days | WeatherKit daily history (≈11 km area) first, NASA POWER (checked: implausibly wet months dropped) as the fallback | L5: under 60 mm → wait for rain | WeatherKit 5–8 + NASA POWER 1 per run with an active round | none |
 
 Weather is only fetched when a round is active: under way, or starting within 10 days. On 8 Nov 2026 with the
-example request (rounds in January, May and September 2027) the run makes no weather call at all. A weather failure
+example request (rounds in March and September 2027) the run makes no weather call at all. A weather failure
 never stops the run: it becomes a flag naming the error type only (a request URL holds the coordinates). Without
 WeatherKit there is no forecast, so L8 has no safe day and every step waits: the flags say so.
 
@@ -69,14 +90,14 @@ WeatherKit there is no forecast, so L8 has no safe day and every step waits: the
 
 | Rule | Value | Status | Where |
 |---|---|---|---|
-| Open month | average rain 100–300 mm; 60–100 mm `cek`; under 60 or over 300 `tunda` | proposal / decided 9 Oct 2026 | `weather/krops_rules.py` `month_gate` |
+| Open month | average rain 100–300 mm; 60–100 mm `cek`; under 60 or over 300 `tunda` | proposal / decided 9 Oct 2026 | `krops_rules.py` `month_gate` |
 | Round months | open months 12 ÷ freq apart, highest in-band share; a tie goes to the earliest start | from `ml-integration` 154ac1f; the tie rule is this script's | `round_months` |
 | Round window | its month and the next one (Jan–Feb = 59 days) | GUESS, from the app design | `ROUND_WINDOW_MONTHS` |
 | Safe day | forecast day ≤ 25 mm, not the day before a heavy day, not the last forecast day, in an open month | proposal / decided 9 Oct 2026; the closed-month cut is pending | `krops_rules.l8_decision` |
-| Too dry | P30 under 60 mm → wait for rain | decided | `krops_rules.choose_p30`, `spreading.wait_reason` |
+| Too dry | P30 under 60 mm → wait for rain | decided | `krops_rules.choose_p30`, `wait_reason` |
 | Order in a round | Dolomit/Kieserit → NPK → SP-36/KCl → Urea/ZA | practice | `PRODUCTS` |
 | After Dolomit | 14–28 days | the mechanism is peer-reviewed, the days are practice (below) | `DOLOMITE_WAIT_DAYS` |
-| After Kieserit | 1 day | GUESS (as in `integration/`) | `KIESERITE_WAIT_DAYS` |
+| After Kieserit | 1 day | GUESS (as in `integration/krops_vari/config.py`) | `KIESERITE_WAIT_DAYS` |
 | Before Urea/ZA | any later day | no source sets a gap from NPK, KCl or SP-36 | `BEFORE_N_STRAIGHT_WAIT_DAYS` |
 | Between other products | 1–7 days | GUESS, from the app design | `OTHER_WAIT_DAYS` |
 

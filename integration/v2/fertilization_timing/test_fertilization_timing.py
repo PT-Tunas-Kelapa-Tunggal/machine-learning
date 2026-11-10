@@ -339,5 +339,16 @@ class CardTest(unittest.TestCase):
         self.assertEqual(cards["urea"], {"state": "done", "done_on": "2027-03-02"})
 
 
+HERE = Path(__file__).resolve().parent
+TEAM_RULES = HERE.parents[2] / "weather" / "krops_rules.py"  # only there while this folder sits in the repo
+
+
+class CopiedRulesTest(unittest.TestCase):
+    @unittest.skipUnless(TEAM_RULES.is_file(), "standalone: weather/krops_rules.py isn't next to this folder")
+    def test_krops_rules_matches_the_team_copy(self):
+        # README.md "Copied from": copy weather/krops_rules.py over again when this fails
+        self.assertEqual((HERE / "krops_rules.py").read_bytes(), TEAM_RULES.read_bytes())
+
+
 if __name__ == "__main__":
     unittest.main()

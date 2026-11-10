@@ -12,10 +12,11 @@ Out: one round per application in the plan year: its window (start month and the
      before", or the reason to wait) for each step.
 
 The months come from the agreed weather rule: L8 Stage A, the 1991–2020 average rain of each calendar month
-(weather/krops_rules.py month_gate: open, cek or tunda), read through integration/krops_vari/weather.py and its cache.
+(krops_rules.py month_gate: open, cek or tunda), read through weather_sources.py and its cache in data/.
 The rounds go in open months 12 ÷ freq apart, the set with the highest in-band (100–200 mm) share, as in
 spreading.round_months on ml-integration (154ac1f). The days come from L8 Stage B (WeatherKit's forecast) and L5
-(P30), through the same modules. Coordinates are never written to the output. README.md lists every datapoint.
+(P30), through the same modules. Both are copies of the team's weather code, so this folder runs on its own
+(README.md "Copied from"). Coordinates are never written to the output. README.md lists every datapoint.
 
 Usage:
     python integration/v2/fertilization_timing/fertilization_timing.py \
@@ -30,15 +31,10 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-INTEGRATION_DIR = Path(__file__).resolve().parents[2]  # integration/, two up from v2/fertilization_timing/
-if str(INTEGRATION_DIR) not in sys.path:
-    sys.path.insert(0, str(INTEGRATION_DIR))
-
-from krops_vari.config import Settings  # noqa: E402  (integration/, on the path above)
-
 SCHEMA_VERSION = "1.0"
 TZ = ZoneInfo("Asia/Jakarta")
-DEFAULT_CACHE = INTEGRATION_DIR / "data" / "weather_cache"
+DEFAULT_CACHE = Path(__file__).resolve().parent / "data" / "weather_cache"
+MONTHS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]  # in `wait` texts
 
 ALLOWED_ROUNDS_PER_YEAR = (1, 2, 3, 4, 6)  # whole months apart (12 ÷ rounds), so not 5
 ROUND_WINDOW_MONTHS = 2  # GUESS – from the app design: a round runs from its month through the next one
@@ -51,7 +47,7 @@ MONTHS_ID = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Ag
 # 2026: +1.7–2.2% NH3 loss from urea per t/ha of dolomitic lime). The number of days is practice, not PPKS/MPOB:
 # pabrikpupukdolomit.com gives 21–28 days before urea, ZA or NPK, 14–21 before SP-36 and 14 before KCl.
 DOLOMITE_WAIT_DAYS = (14, 28)
-KIESERITE_WAIT_DAYS = (Settings().min_days_mg_to_n["kieserite_Mg_expensive"],) * 2  # GUESS in integration/: 1 day
+KIESERITE_WAIT_DAYS = (1, 1)  # GUESS – integration/krops_vari/config.py min_days_mg_to_n["kieserite_Mg_expensive"]
 # Urea/ZA go on a day of their own, but no source sets a gap from NPK, KCl or SP-36 (a Bungo TM 15 trial, Rozi &
 # Prastia 2019, spread urea with KCl a week after SP-36). Rain decides the urea day: L8 Stage B.
 BEFORE_N_STRAIGHT_WAIT_DAYS = (1, None)
@@ -265,15 +261,31 @@ def card_states(start, end, steps, done, today):
     return header, carded
 
 
+def wait_reason(l8, p30, today):
+    """Why not to spread now, or None. L8 first (the month and the forecast), then L5 (a dry spell).
+
+    From integration/krops_vari/spreading.py, unchanged."""
+    month = MONTHS_EN[today.month - 1]
+    state = l8["l8_state"]
+    if state == "tunda":
+        return f"wait: {month} is a tunda month (avg {l8['month_gate']['avg_mm']:.0f} mm)"
+    if state == "cek":
+        return f"check soil and weather first: {month} averages {l8['month_gate']['avg_mm']:.0f} mm"
+    if state == "cek_hujan":
+        return "wait: no safe day in the 10-day forecast"
+    if p30 and p30.get("water_stress"):
+        return f"wait for rain: P30 {p30['p30_mm']} mm, under 60 mm"
+    return None
+
+
 def daily_plan(start, end, steps, forecast, p30, today, stage_a, done):
     """(the round's daily block, its steps with a schedule each) from the forecast (L8 Stage B) and P30 (L5).
 
-    The rules are the integration's: rules.l8_decision picks the safe days, spreading.wait_reason says why to wait.
+    The rules are the team's: rules.l8_decision picks the safe days, wait_reason says why to wait.
     A step goes on the first safe day at least the previous step's minimum wait after that step's day (the day it
     was spread, from `done`, or its planned day). Past the forecast it gets "not before" that day instead.
     """
-    from krops_vari.spreading import wait_reason
-    from krops_vari.weather import rules  # weather/ is only imported when the daily weather is used
+    import krops_rules as rules  # the copy next to this file (README.md "Copied from")
 
     day = max(today, start)
     l8 = rules.l8_decision(forecast, stage_a, day)
@@ -401,8 +413,8 @@ def build_schedule(request, stage_a, today, year=None, period=None, daily_weathe
 
 
 def load_climate(lat, lon, today, cache_dir=DEFAULT_CACHE):
-    """The integration's climate.json for the plot's NASA POWER cell: cached, or fetched (30 years) and cached."""
-    from krops_vari.weather import WeatherClient  # needs requests and weather/: only when the climate is read
+    """climate.json for the plot's NASA POWER cell: cached, or fetched (30 years) and cached."""
+    from weather_sources import WeatherClient  # needs requests: only when the climate is read
 
     return WeatherClient(cache_dir, use_weatherkit=False).climate(lat, lon, today)
 
@@ -411,12 +423,12 @@ def load_daily_weather(lat, lon, today, normals_mm, cache_dir=DEFAULT_CACHE):
     """(forecast {date: mm}, P30 record, flags): WeatherKit's 10-day forecast and the L5 P30 as of today.
 
     A failure never stops the run: it becomes a flag, by error type only (a request URL carries the coordinates)."""
-    from krops_vari.weather import WeatherClient
+    from weather_sources import WeatherClient
 
     client = WeatherClient(cache_dir)
     forecast, p30, flags = {}, None, []
     if client.weatherkit is None:
-        flags.append("WeatherKit not configured (weather/.env, pyjwt, cryptography): no forecast, P30 from NASA POWER")
+        flags.append("WeatherKit not configured (.env, pyjwt, cryptography): no forecast, P30 from NASA POWER")
     try:
         forecast = client.forecast(lat, lon, today)
     except Exception as error:  # noqa: BLE001 – reported, never fatal
