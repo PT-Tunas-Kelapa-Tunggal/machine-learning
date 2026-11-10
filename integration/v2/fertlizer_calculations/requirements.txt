@@ -1,0 +1,15 @@
+# Runtime dependencies for outputs/new_readable.py
+coremltools
+opencv-python
+matplotlib
+numpy
+Pillow
+pandas
+requests
+python-dotenv
+ipython
+PyJWT
+cryptography
+
+# Needed only to run the source notebook in Jupyter
+ipykernel

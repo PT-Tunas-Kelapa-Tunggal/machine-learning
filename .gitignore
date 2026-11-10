@@ -33,3 +33,6 @@ build/
 
 # krops_vari: weather cache (climate per NASA POWER cell) and API uploads/results
 integration/data/
+
+# notebook
+segmentation/iteration2/outputs/
