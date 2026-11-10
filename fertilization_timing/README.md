@@ -1,13 +1,13 @@
 # fertilization_timing: the year's fertilizer rounds for the "Jadwal Pemupukan" screen
 
-One request in (the farm, how often it fertilizes, which fertilizers and how much a year), one JSON out: the rounds of
+One request in (the plot's coordinates, how often it fertilizes, which fertilizers and how much a year), one JSON out: the rounds of
 the plan year, each with its two-month window, the products in order with the wait between them, and, for the round
 under way or about to start, the day to spread each product or the reason to wait.
 
 | | What it is |
 |---|---|
 | `fertilization_timing.py` | the schedule: pure functions and a command line |
-| `example_request.json` | an input: Dolomite + NPK 15-15-15, 3 rounds a year, the Tanjung Pinang trial site |
+| `example_request.json` | an input: Dolomite, five NPK grades and Urea, 2 rounds a year, the Tanjung Pinang trial site; five products have no `id` |
 | `example_output.json` | its output on 8 Nov 2026 (no round active, so no daily dates) |
 | `example_request_in_progress.json` | Dolomit + NPK + Urea (400 / 120 / 100 kg a round), Dolomit marked 5 Jan 2027, NPK 19 Jan |
 | `example_output_in_progress.json` | its output on 19 Jan 2027 with `--no-daily`: the card of image 8 (Urea "Bisa ditandai mulai 20 Januari") |
@@ -39,14 +39,13 @@ python -m unittest discover -s fertilization_timing
 
 | Field | Required | Used for |
 |---|---|---|
-| `farm.name` | no | `farm_name` in the output ("Belakang Rumah") |
-| `farm.lat`, `farm.lon` | **yes** | the climate cell and the forecast. Never written to the output |
-| `fertilizerHistory.freq` | **yes** | rounds a year: 1, 2, 3, 4 or 6 (12 ÷ freq whole months apart) |
-| `fertilizerHistory.fertilizers[].name` | **yes** | the product: sets its order in a round, its wait and its display name |
-| `fertilizerHistory.fertilizers[].overallDoseWeightInKg` | **yes** | kg of that product for the whole farm **in a year**; each round gets it ÷ freq |
-| `fertilizerHistory.fertilizers[].id` | yes, with `applications` | matches a spread step to its product |
-| `fertilizerHistory.fertilizers[].composition` | NPK only | the grade in the name: "NPK 15-15-15" (Mg added when not 0) |
-| `fertilizerHistory.fertilizers[].bagKg` | no | passed through as `bag_kg` |
+| `latitude`, `longitude` | **yes** | the climate cell and the forecast; the run stops when either is `null`. Never written to the output |
+| `fertilizerFreq` | **yes** | rounds a year: 1, 2, 3, 4 or 6 (12 ÷ freq whole months apart) |
+| `fertilizers[].name` | **yes** | the product: sets its order in a round, its wait and its display name |
+| `fertilizers[].overallDoseWeightInKg` | **yes** | kg of that product for the whole farm **in a year**; each round gets it ÷ freq |
+| `fertilizers[].id` | yes, with `applications` | matches a spread step to its product. `null` is allowed: the step is still planned but can't be marked, is left out of `completed`, and is flagged |
+| `fertilizers[].composition` | NPK only | the grade in the name: "NPK 15-15-15" (Mg added when not 0) |
+| `fertilizers[].bagKg` | no | passed through as `bag_kg` |
 | `applications[]`: `{fertilizerId, date}` | no | the steps already spread ("Tandai Mulai Memupuk", and "Tandai Sudah Dipupuk" for an overdue one). A date belongs to the round it falls in or after, up to the next round's start, so a step marked after its window still counts. The card states and the next step's dates count from it. A date in the plan year before its first round is ignored and flagged |
 
 Products with a rule: Dolomite/Dolomit, Kieserite/Kieserit, NPK, SP-36, KCl/MOP, Urea, ZA. Any other name is kept,
@@ -97,7 +96,7 @@ Sources for the waits (checked 8 Nov 2026):
 
 | Field | Meaning |
 |---|---|
-| `plan_year`, `today`, `rounds_per_year`, `farm_name` | the header: "Rekomendasi untuk tahun 2027" |
+| `plan_year`, `today`, `rounds_per_year` | the header: "Rekomendasi untuk tahun 2027" |
 | `rounds[].start_month_name`, `end_month_name`, `start_date`, `end_date`, `total_days` | the round card: "Mulai Januari · Selesai Februari" |
 | `rounds[].status` | `upcoming` (`days_until_start`: "Dimulai dalam 54 hari lagi"), `ongoing` (`day_of_round` of `total_days`: "Hari ke-5 dari 59 hari"), `done` |
 | `rounds[].card` | the card header state: see Card states |
@@ -107,7 +106,7 @@ Sources for the waits (checked 8 Nov 2026):
 | `weather_basis` | the month table, the candidate month sets and the rule |
 | `flags` | what needs a look: unknown products, two Mg sources, a window running into a closed month, no forecast, … |
 
-The daily part of a live run on 8 Nov 2026 (the example request with `freq: 6`, so a November–December round is under way):
+The daily part of a live run on 8 Nov 2026 (Dolomite 22 kg + NPK 15-15-15 24 kg a year with `fertilizerFreq: 6`, so a November–December round is under way):
 
 ```json
 "daily": {
@@ -145,7 +144,7 @@ renders them as they are. Image numbers are the design's (Dolomit 400 kg → NPK
 | `ongoing` | in the round, nothing marked yet | `day_of_round`, `total_days` | "Berlangsung · Hari ke-5 dari 59 hari" (5) |
 | `started` | something marked, not everything, the round not over | `started_on`: the first date marked | "Dimulai 5 Jan 2027" (6–9) |
 | `period_passed` | the round is over, something isn't marked | `period_end` | "Periode terlewat 28 Feb 2027" (10) |
-| `completed` | everything marked (even after the round) | `completed_on`: the last date marked | the collapsed card "Selesai 22 Januari 2027" |
+| `completed` | every step with an `id` marked (even after the round) | `completed_on`: the last date marked | the collapsed card "Selesai 22 Januari 2027" |
 
 **Each fertilizer** (`rounds[].steps[].card`)
 

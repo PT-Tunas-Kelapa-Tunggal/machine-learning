@@ -1,8 +1,8 @@
 """Jadwal Pemupukan: the year's fertilizer rounds for the app screen, from the farm's fertilizers and L8 Stage A.
 
-In:  a request JSON with farm.name, farm.lat/lon and fertilizerHistory: freq (rounds a year) and fertilizers[], where
+In:  a request JSON with latitude/longitude, fertilizerFreq (rounds a year) and fertilizers[], where
      overallDoseWeightInKg is the kg of that product for the whole farm in a year: each round gets it ÷ freq.
-     Only the listed fertilizers are scheduled.
+     Only the listed fertilizers are scheduled; one with a null id can't be marked as spread.
      Optional applications[]: {fertilizerId, date} for the steps already spread ("Tandai Mulai Memupuk" or, when
      overdue, "Tandai Sudah Dipupuk").
 Out: one round per application in the plan year: its window (start month and the next one), its status from today
@@ -79,12 +79,12 @@ UNKNOWN_PRODUCT = (None, 2, OTHER_WAIT_DAYS)  # after the compound, before the N
 
 
 def rounds_per_year(request):
-    """fertilizerHistory.freq as a whole number of rounds a year; one of ALLOWED_ROUNDS_PER_YEAR."""
-    freq = (request.get("fertilizerHistory") or {}).get("freq")
+    """fertilizerFreq as a whole number of rounds a year; one of ALLOWED_ROUNDS_PER_YEAR."""
+    freq = request.get("fertilizerFreq")
     if isinstance(freq, bool) or not isinstance(freq, (int, float)) or freq != int(freq):
-        raise ValueError(f"fertilizerHistory.freq must be a whole number, not {freq!r}")
+        raise ValueError(f"fertilizerFreq must be a whole number, not {freq!r}")
     if int(freq) not in ALLOWED_ROUNDS_PER_YEAR:
-        raise ValueError(f"fertilizerHistory.freq must be one of {', '.join(map(str, ALLOWED_ROUNDS_PER_YEAR))}, "
+        raise ValueError(f"fertilizerFreq must be one of {', '.join(map(str, ALLOWED_ROUNDS_PER_YEAR))}, "
                          f"not {int(freq)}")
     return int(freq)
 
@@ -148,6 +148,8 @@ def fertilizer_steps(fertilizers, rounds):
         dose = entry.get("overallDoseWeightInKg")
         if dose is None:
             flags.append(f"{display}: overallDoseWeightInKg is missing")
+        if entry.get("id") is None:
+            flags.append(f"{display}: no id, so it can't be marked as spread")
         ordered.append((group, index, entry, display, dose, wait))
     ordered.sort(key=lambda item: item[:2])  # stable: the user's order inside a group
     mg_sources = {display for group, _, _, display, _, _ in ordered if group == 0}
@@ -217,8 +219,9 @@ def card_states(start, end, steps, done, today):
     the first step; after the deadline it is overdue. A step after one not yet marked is locked.
     """
     status = round_status(start, end, today)
-    marked = [done[s["fertilizer_id"]] for s in steps if s["fertilizer_id"] in done]
-    if steps and len(marked) == len(steps):
+    markable = [s for s in steps if s["fertilizer_id"] is not None]  # a step with no id can't be marked
+    marked = [done[s["fertilizer_id"]] for s in markable if s["fertilizer_id"] in done]
+    if markable and len(marked) == len(markable):
         header = {"state": "completed", "completed_on": max(marked).isoformat()}
     elif today > end:
         header = {"state": "period_passed", "period_end": end.isoformat()}
@@ -320,7 +323,7 @@ def build_schedule(request, stage_a, today, year=None, period=None, daily_weathe
     daily_weather: a function returning (forecast {date: mm}, P30 record, flags), called once and only when a round
     is active (under way, or starting within FORECAST_DAYS). Without it, no round gets daily dates."""
     rounds = rounds_per_year(request)
-    steps, flags = fertilizer_steps((request.get("fertilizerHistory") or {}).get("fertilizers") or [], rounds)
+    steps, flags = fertilizer_steps(request.get("fertilizers") or [], rounds)
     if not steps:
         flags.append("no fertilizers listed: every round is empty")
     chosen, open_sets = round_months(stage_a, rounds)
@@ -330,9 +333,13 @@ def build_schedule(request, stage_a, today, year=None, period=None, daily_weathe
     windows = {number: round_window(year, month) for number, month in enumerate(chosen or (), start=1)}
     done, application_flags = applications_by_round(request.get("applications"), windows, year)
     flags += application_flags
-    step_ids = {s["fertilizer_id"] for s in steps}
-    active = [n for n, (start, end) in windows.items()  # a round with every step marked needs no weather
-              if is_active(round_status(start, end, today)) and not step_ids <= set(done.get(n, {}))]
+    step_ids = {s["fertilizer_id"] for s in steps if s["fertilizer_id"] is not None}  # no id: can't be marked
+
+    def completed(number):  # a round with every markable step marked needs no weather, as its card says
+        return not steps or (step_ids and step_ids <= set(done.get(number, {})))
+
+    active = [n for n, (start, end) in windows.items()
+              if is_active(round_status(start, end, today)) and not completed(n)]
     weather = None
     if active and daily_weather is not None:
         forecast, p30, weather_flags = daily_weather()
@@ -374,7 +381,6 @@ def build_schedule(request, stage_a, today, year=None, period=None, daily_weathe
 
     return {
         "schema_version": SCHEMA_VERSION,
-        "farm_name": (request.get("farm") or {}).get("name"),
         "plan_year": year,
         "today": today.isoformat(),
         "rounds_per_year": rounds,
@@ -424,7 +430,7 @@ def load_daily_weather(lat, lon, today, normals_mm, cache_dir=DEFAULT_CACHE):
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(description="Fertilizer rounds for the Jadwal Pemupukan screen")
-    parser.add_argument("--request", type=Path, required=True, help="request JSON (farm, fertilizerHistory)")
+    parser.add_argument("--request", type=Path, required=True, help="request JSON (latitude, longitude, fertilizerFreq, fertilizers)")
     parser.add_argument("--today", type=date.fromisoformat, help="YYYY-MM-DD; default today in WIB")
     parser.add_argument("--year", type=int,
                         help="plan year; default this year while one of its rounds hasn't ended, else next year")
@@ -437,11 +443,10 @@ def parse_args(argv):
 def main(argv=None):
     args = parse_args(argv)
     request = json.loads(args.request.read_text(encoding="utf-8"))
-    farm = request.get("farm") or {}
-    if farm.get("lat") is None or farm.get("lon") is None:
-        raise SystemExit("farm.lat and farm.lon are required: the months come from the plot's climate")
+    if request.get("latitude") is None or request.get("longitude") is None:
+        raise SystemExit("latitude and longitude are required: the months come from the plot's climate")
     today = args.today or datetime.now(TZ).date()
-    lat, lon = float(farm["lat"]), float(farm["lon"])
+    lat, lon = float(request["latitude"]), float(request["longitude"])
     climate = load_climate(lat, lon, today, args.cache_dir)
     stage_a = {int(m): row for m, row in climate["stage_a"].items()}
     daily_weather = None if args.no_daily else (

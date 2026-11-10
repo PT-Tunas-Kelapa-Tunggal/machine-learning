@@ -19,10 +19,18 @@ STAGE_A = {m: {"avg_mm": avg, "in_band_share": share, "gate": gate} for m, avg, 
 ]}
 
 
+# Dolomit → NPK, the two products most tests plan with
+TWO = [{"name": "Dolomite", "bagKg": 50, "id": "A01C2E47-5D6B-4B95-9D31-6A1C8217D045", "overallDoseWeightInKg": 22.0},
+       {"name": "NPK", "composition": {"N": 15, "P": 15, "K": 15, "Mg": 0}, "bagKg": 50,
+        "id": "D828E19B-7B72-4E11-A35D-B1B7D2F9C304", "overallDoseWeightInKg": 24.0}]
+
+
 def request(freq=3, fertilizers=None):
-    return {"farm": {"name": "Belakang Rumah"},
-            "fertilizerHistory": {"freq": freq, "fertilizers": EXAMPLE["fertilizerHistory"]["fertilizers"]
-                                  if fertilizers is None else fertilizers}}
+    return {"latitude": 0.92, "longitude": 104.45, "fertilizerFreq": freq,
+            "fertilizers": TWO if fertilizers is None else fertilizers}
+
+
+BASIC = request()
 
 
 class RoundMonthsTest(unittest.TestCase):
@@ -48,8 +56,8 @@ class RoundMonthsTest(unittest.TestCase):
 
 
 class StepsTest(unittest.TestCase):
-    def test_example_dolomite_then_npk(self):
-        steps, flags = ft.fertilizer_steps(EXAMPLE["fertilizerHistory"]["fertilizers"], 2)
+    def test_dolomite_then_npk(self):
+        steps, flags = ft.fertilizer_steps(TWO, 2)
         self.assertEqual([s["display_name"] for s in steps], ["Dolomit", "NPK 15-15-15"])
         self.assertEqual([s["annual_dose_kg"] for s in steps], [22.0, 24.0])
         self.assertEqual([s["dose_kg"] for s in steps], [11.0, 12.0])  # the year's kg ÷ 2 rounds
@@ -76,16 +84,29 @@ class StepsTest(unittest.TestCase):
                                         {"name": "Dolomit", "overallDoseWeightInKg": 30}], 1)
         self.assertEqual(steps[0]["wait_after_days"], {"min": 14, "max": 28})  # the lime's wait holds before N
 
+    def test_example_request(self):
+        steps, flags = ft.fertilizer_steps(EXAMPLE["fertilizers"], EXAMPLE["fertilizerFreq"])
+        self.assertEqual([s["display_name"] for s in steps],
+                         ["Dolomit", "NPK 15-15-15", "NPK 12-6-22-3", "NPK 13-6-27-4", "NPK 13-8-27-4",
+                          "NPK 16-16-16", "Urea"])
+        for step, entry in zip(steps, EXAMPLE["fertilizers"]):  # the request is already in spreading order
+            self.assertAlmostEqual(step["dose_kg"], entry["overallDoseWeightInKg"] / 2)
+        self.assertEqual(steps[0]["wait_after_days"], {"min": 14, "max": 28})
+        self.assertEqual(steps[1]["wait_after_days"], {"min": 1, "max": 7})
+        self.assertEqual(steps[5]["wait_after_days"], {"min": 1, "max": None})  # the last NPK, before urea
+        self.assertEqual(len(flags), 5)  # the five products with no id
+        self.assertTrue(all("no id" in f for f in flags))
+
     def test_unknown_product_is_flagged(self):
-        steps, flags = ft.fertilizer_steps([{"name": "Pupuk Organik", "overallDoseWeightInKg": 5},
-                                            {"name": "Urea", "overallDoseWeightInKg": 10}], 1)
+        steps, flags = ft.fertilizer_steps([{"name": "Pupuk Organik", "id": "org", "overallDoseWeightInKg": 5},
+                                            {"name": "Urea", "id": "urea", "overallDoseWeightInKg": 10}], 1)
         self.assertEqual([s["display_name"] for s in steps], ["Pupuk Organik", "Urea"])
         self.assertEqual(len(flags), 1)
 
 
 class ScheduleTest(unittest.TestCase):
-    def test_example_year_plan(self):
-        schedule = ft.build_schedule(EXAMPLE, STAGE_A, date(2026, 11, 8))
+    def test_year_plan(self):
+        schedule = ft.build_schedule(BASIC, STAGE_A, date(2026, 11, 8))
         self.assertEqual(schedule["plan_year"], 2027)
         rounds = schedule["rounds"]
         self.assertEqual([(r["start_month_name"], r["end_month_name"]) for r in rounds],
@@ -101,13 +122,13 @@ class ScheduleTest(unittest.TestCase):
         self.assertEqual(schedule["flags"], [])
 
     def test_ongoing_round_shows_day_of_window(self):
-        schedule = ft.build_schedule(EXAMPLE, STAGE_A, date(2027, 1, 5), year=2027)
+        schedule = ft.build_schedule(BASIC, STAGE_A, date(2027, 1, 5), year=2027)
         first = schedule["rounds"][0]
         self.assertEqual((first["status"], first["day_of_round"], first["total_days"]), ("ongoing", 5, 59))
         self.assertEqual(schedule["rounds"][1]["status"], "upcoming")
 
     def test_done_round(self):
-        schedule = ft.build_schedule(EXAMPLE, STAGE_A, date(2027, 3, 1), year=2027)
+        schedule = ft.build_schedule(BASIC, STAGE_A, date(2027, 3, 1), year=2027)
         self.assertEqual(schedule["rounds"][0]["status"], "done")
 
     def test_window_into_a_closed_month_is_flagged(self):
@@ -118,7 +139,7 @@ class ScheduleTest(unittest.TestCase):
         self.assertTrue(any("Desember is not an open month" in f for f in schedule["flags"]))
 
 
-DOLOMITE_ID = EXAMPLE["fertilizerHistory"]["fertilizers"][0]["id"]
+DOLOMITE_ID = TWO[0]["id"]
 P30_OK = {"p30_mm": 110.8, "p30_source": "weatherkit-history", "p30_quality": "ok", "water_stress": False}
 
 
@@ -135,7 +156,7 @@ class DailyTest(unittest.TestCase):
     def test_heavy_rain_and_the_day_before_are_skipped(self):
         today = date(2027, 1, 5)
         rain = [2, 2, 32, 2, 2, 2, 2, 2, 2, 2]  # 7 Jan heavy → 6 and 7 go, and 14 Jan (the last day)
-        schedule = ft.build_schedule(EXAMPLE, STAGE_A, today, daily_weather=weather(forecast_from(today, rain)))
+        schedule = ft.build_schedule(BASIC, STAGE_A, today, daily_weather=weather(forecast_from(today, rain)))
         first = schedule["rounds"][0]
         self.assertEqual(first["daily"]["l8"]["state"], "jendela_tabur")
         self.assertEqual(first["daily"]["l8"]["safe_days"][:2], ["2027-01-05", "2027-01-08"])
@@ -146,7 +167,7 @@ class DailyTest(unittest.TestCase):
 
     def test_spread_step_sets_the_next_date(self):
         today = date(2027, 1, 12)
-        request = {**EXAMPLE, "applications": [{"fertilizerId": DOLOMITE_ID, "date": "2027-01-02"}]}
+        request = {**BASIC, "applications": [{"fertilizerId": DOLOMITE_ID, "date": "2027-01-02"}]}
         schedule = ft.build_schedule(request, STAGE_A, today, daily_weather=weather(forecast_from(today, [1] * 10)))
         dolomite, npk = (s["schedule"] for s in schedule["rounds"][0]["steps"])
         self.assertEqual((dolomite["status"], dolomite["date"]), ("done", "2027-01-02"))
@@ -164,7 +185,7 @@ class DailyTest(unittest.TestCase):
     def test_water_stress_waits(self):
         today = date(2027, 1, 5)
         dry = {**P30_OK, "p30_mm": 40.0, "water_stress": True}
-        schedule = ft.build_schedule(EXAMPLE, STAGE_A, today,
+        schedule = ft.build_schedule(BASIC, STAGE_A, today,
                                      daily_weather=weather(forecast_from(today, [1] * 10), dry))
         first = schedule["rounds"][0]
         self.assertIn("wait for rain", first["daily"]["wait"])
@@ -183,7 +204,7 @@ class DailyTest(unittest.TestCase):
 
     def test_no_forecast_waits_and_flags(self):
         today = date(2027, 1, 5)
-        schedule = ft.build_schedule(EXAMPLE, STAGE_A, today, daily_weather=weather({}, None, ["no keys"]))
+        schedule = ft.build_schedule(BASIC, STAGE_A, today, daily_weather=weather({}, None, ["no keys"]))
         self.assertEqual(schedule["rounds"][0]["daily"]["l8"]["state"], "cek_hujan")
         self.assertIn("no keys", schedule["flags"])
         self.assertTrue(any("no 10-day forecast" in f for f in schedule["flags"]))
@@ -192,20 +213,20 @@ class DailyTest(unittest.TestCase):
         def fail():
             raise AssertionError("weather fetched with no active round")
 
-        schedule = ft.build_schedule(EXAMPLE, STAGE_A, date(2026, 11, 8), daily_weather=fail)
+        schedule = ft.build_schedule(BASIC, STAGE_A, date(2026, 11, 8), daily_weather=fail)
         self.assertEqual({r["daily"] is None for r in schedule["rounds"]}, {True})
         self.assertNotIn("schedule", schedule["rounds"][0]["steps"][0])
 
     def test_round_starting_within_the_forecast_is_active(self):
         today = date(2026, 12, 25)  # 7 days before 1 January
-        schedule = ft.build_schedule(EXAMPLE, STAGE_A, today, daily_weather=weather(forecast_from(today, [1] * 10)))
+        schedule = ft.build_schedule(BASIC, STAGE_A, today, daily_weather=weather(forecast_from(today, [1] * 10)))
         first = schedule["rounds"][0]
         self.assertEqual(first["daily"]["reference_day"], "2027-01-01")  # December is tunda, January is judged
         self.assertEqual(first["steps"][0]["schedule"]["date"], "2027-01-01")
 
     def test_default_plan_year(self):
-        self.assertEqual(ft.build_schedule(EXAMPLE, STAGE_A, date(2026, 11, 8))["plan_year"], 2027)
-        self.assertEqual(ft.build_schedule(EXAMPLE, STAGE_A, date(2027, 1, 20))["plan_year"], 2027)
+        self.assertEqual(ft.build_schedule(BASIC, STAGE_A, date(2026, 11, 8))["plan_year"], 2027)
+        self.assertEqual(ft.build_schedule(BASIC, STAGE_A, date(2027, 1, 20))["plan_year"], 2027)
 
     def test_application_before_the_first_round_is_flagged(self):
         only_nov = {m: {**row, "gate": "open" if m == 11 else "cek"} for m, row in STAGE_A.items()}
@@ -215,7 +236,7 @@ class DailyTest(unittest.TestCase):
 
 
 def request_with(fertilizers, freq=3, applications=None):
-    return {"farm": {"name": "Belakang Rumah"}, "fertilizerHistory": {"freq": freq, "fertilizers": fertilizers},
+    return {**request(freq, fertilizers),
             "applications": [{"fertilizerId": i, "date": d} for i, d in (applications or {}).items()]}
 
 
@@ -299,6 +320,16 @@ class CardTest(unittest.TestCase):
                                                               "urea": "2027-01-22"}, daily_weather=fail)
         self.assertEqual(header, {"state": "completed", "completed_on": "2027-01-22"})  # "Selesai 22 Januari 2027"
         self.assertEqual({w["state"] for w in waits if w}, {"idle"})
+
+    def test_step_with_no_id_does_not_block_completed(self):
+        fertilizers = THREE[:2] + [{**THREE[2], "id": None}]
+        schedule = ft.build_schedule(request_with(fertilizers, applications={"dol": "2027-01-05",
+                                                                             "npk": "2027-01-19"}),
+                                     STAGE_A, date(2027, 1, 25))
+        first = schedule["rounds"][0]
+        self.assertEqual(first["card"], {"state": "completed", "completed_on": "2027-01-19"})
+        self.assertEqual(first["steps"][2]["card"]["state"], "ready")  # urea is shown, just can't be marked
+        self.assertIn("Urea: no id, so it can't be marked as spread", schedule["flags"])
 
     def test_marked_after_the_window_still_counts(self):
         # "Tandai Sudah Dipupuk" on 2 March: after the window, before round 2 (May)
