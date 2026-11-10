@@ -23,9 +23,10 @@ the packages (`weather/requirements.txt`).
 
 ```bash
 conda activate krops-weather
-python fertilization_timing/fertilization_timing.py --request fertilization_timing/example_request.json \
+python integration/v2/fertilization_timing/fertilization_timing.py \
+    --request integration/v2/fertilization_timing/example_request.json \
     [--today 2026-11-08] [--year 2027] [--no-daily] [--out schedule.json]
-python -m unittest discover -s fertilization_timing
+python -m unittest discover -s integration/v2/fertilization_timing
 ```
 
 - `--today`: the day to plan from (default: today in WIB). It sets the plan year, the status of each round and which

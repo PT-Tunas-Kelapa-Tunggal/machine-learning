@@ -18,7 +18,8 @@ spreading.round_months on ml-integration (154ac1f). The days come from L8 Stage 
 (P30), through the same modules. Coordinates are never written to the output. README.md lists every datapoint.
 
 Usage:
-    python fertilization_timing/fertilization_timing.py --request fertilization_timing/example_request.json \
+    python integration/v2/fertilization_timing/fertilization_timing.py \
+        --request integration/v2/fertilization_timing/example_request.json \
         [--today 2026-11-08] [--year 2027] [--no-daily] [--out schedule.json]
 """
 import argparse
@@ -29,8 +30,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-REPO = Path(__file__).resolve().parents[1]
-INTEGRATION_DIR = REPO / "integration"
+INTEGRATION_DIR = Path(__file__).resolve().parents[2]  # integration/, two up from v2/fertilization_timing/
 if str(INTEGRATION_DIR) not in sys.path:
     sys.path.insert(0, str(INTEGRATION_DIR))
 
