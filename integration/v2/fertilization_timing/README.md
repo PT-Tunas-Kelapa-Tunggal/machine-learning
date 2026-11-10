@@ -23,8 +23,9 @@ The folder runs on its own: it imports nothing from the rest of the repo.
 Python 3.9 or later. The schedule and the tests need only the standard library; the weather needs
 `requirements.txt`. For the daily weather, copy `.env.example` to `.env` and fill in the WeatherKit keys (or point
 `KROPS_WEATHER_ENV` to a `.env` elsewhere). Without them there is no forecast, which the flags say.
-The climate is cached in `data/weather_cache/` (not committed): on a fresh copy the first run fetches 30 years of
-NASA POWER rain for the plot's cell, once a year.
+The climate is cached in `data/weather_cache/`. Only the trial site's cell (`n1.000_e104.3750`, computed 26 Oct
+2026) is committed, so the examples run offline until it turns a year old (26 Oct 2027); any other plot's first run
+fetches 30 years of NASA POWER rain for its cell, once a year.
 
 ```bash
 pip install -r requirements.txt
