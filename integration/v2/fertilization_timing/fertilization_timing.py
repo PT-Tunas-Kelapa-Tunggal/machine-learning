@@ -53,7 +53,7 @@ KIESERITE_WAIT_DAYS = (1, 1)
 # Urea/ZA go on a day of their own, but no source sets a gap from NPK, KCl or SP-36 (a Bungo TM 15 trial, Rozi &
 # Prastia 2019, spread urea with KCl a week after SP-36). Rain decides the urea day: L8 Stage B.
 BEFORE_N_STRAIGHT_WAIT_DAYS = (1, None)
-OTHER_WAIT_DAYS = (1, 7)  # GUESS – from the app design: "Tunggu 1–7 hari" between the other products
+OTHER_WAIT_DAYS = (1, 7)  # decided 11 Nov 2026 (from the app design): "Tunggu 1–7 hari" between the other products
 
 # Order in a round: Mg/lime first, then the compound, then the straights; N last, never mixed with the lime.
 # (display name, order group, (min, max) days to wait before the next product)

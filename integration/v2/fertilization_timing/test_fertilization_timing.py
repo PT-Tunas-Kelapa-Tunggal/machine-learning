@@ -79,7 +79,7 @@ class StepsTest(unittest.TestCase):
             {"name": "NPK", "composition": {"N": 15, "P": 15, "K": 15, "Mg": 0}, "overallDoseWeightInKg": 20},
             {"name": "KCl", "overallDoseWeightInKg": 10},
         ], 1)
-        self.assertEqual(steps[0]["wait_after_days"], {"min": 1, "max": 7})  # no N straight next: design GUESS
+        self.assertEqual(steps[0]["wait_after_days"], {"min": 1, "max": 7})  # no N straight next: the 1–7 days
         steps, _ = ft.fertilizer_steps([{"name": "Urea", "overallDoseWeightInKg": 10},
                                         {"name": "Dolomit", "overallDoseWeightInKg": 30}], 1)
         self.assertEqual(steps[0]["wait_after_days"], {"min": 14, "max": 28})  # the lime's wait holds before N

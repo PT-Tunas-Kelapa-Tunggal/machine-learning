@@ -103,7 +103,7 @@ WeatherKit there is no forecast, so L8 has no safe day and every step waits: the
 | After Dolomit | 14–28 days | team decision (11 Nov 2026); the mechanism is peer-reviewed, the days are practice (below) | `DOLOMITE_WAIT_DAYS` |
 | After Kieserit | 1 day | decided 11 Nov 2026 (as in `integration/krops_vari/config.py`) | `KIESERITE_WAIT_DAYS` |
 | Before Urea/ZA | any later day | no source sets a gap from NPK, KCl or SP-36 | `BEFORE_N_STRAIGHT_WAIT_DAYS` |
-| Between other products | 1–7 days | GUESS, from the app design | `OTHER_WAIT_DAYS` |
+| Between other products | 1–7 days | decided 11 Nov 2026 (from the app design) | `OTHER_WAIT_DAYS` |
 
 A daily date uses the minimum wait: the next step goes on the first safe day at least that many days after the
 previous step's day.
