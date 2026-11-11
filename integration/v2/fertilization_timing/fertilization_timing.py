@@ -37,7 +37,7 @@ DEFAULT_CACHE = Path(__file__).resolve().parent / "data" / "weather_cache"
 MONTHS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]  # in `wait` texts
 
 ALLOWED_ROUNDS_PER_YEAR = (1, 2, 3, 4, 6)  # whole months apart (12 ÷ rounds), so not 5
-ROUND_WINDOW_MONTHS = 2  # GUESS – from the app design: a round runs from its month through the next one
+ROUND_WINDOW_MONTHS = 2  # decided 11 Nov 2026 (from the app design): a round runs from its month through the next one
 FORECAST_DAYS = 10  # WeatherKit's daily forecast: a round starting this close gets daily dates
 MONTHS_ID = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober",
              "November", "Desember"]
@@ -46,8 +46,10 @@ MONTHS_ID = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Ag
 # Dolomite is a lime: the higher pH near its particles turns urea/ammonium N into ammonia gas (Minato et al., RBCS
 # 2026: +1.7–2.2% NH3 loss from urea per t/ha of dolomitic lime). The number of days is practice, not PPKS/MPOB:
 # pabrikpupukdolomit.com gives 21–28 days before urea, ZA or NPK, 14–21 before SP-36 and 14 before KCl.
+# 14–28 days: the team's decision, 11 Nov 2026.
 DOLOMITE_WAIT_DAYS = (14, 28)
-KIESERITE_WAIT_DAYS = (1, 1)  # GUESS – integration/krops_vari/config.py min_days_mg_to_n["kieserite_Mg_expensive"]
+# decided 11 Nov 2026, as in integration/krops_vari/config.py min_days_mg_to_n["kieserite_Mg_expensive"]
+KIESERITE_WAIT_DAYS = (1, 1)
 # Urea/ZA go on a day of their own, but no source sets a gap from NPK, KCl or SP-36 (a Bungo TM 15 trial, Rozi &
 # Prastia 2019, spread urea with KCl a week after SP-36). Rain decides the urea day: L8 Stage B.
 BEFORE_N_STRAIGHT_WAIT_DAYS = (1, None)
@@ -288,7 +290,9 @@ def daily_plan(start, end, steps, forecast, p30, today, stage_a, done):
     import krops_rules as rules  # the copy next to this file (README.md "Copied from")
 
     day = max(today, start)
-    l8 = rules.l8_decision(forecast, stage_a, day)
+    # No cut at a closed month: a safe day in the window's next month stays (decided 11 Nov 2026). Switched off
+    # here so krops_rules.py stays a verbatim copy.
+    l8 = rules.l8_decision(forecast, stage_a, day, cut_at_closed_month=False)
     safe_days = [d for d in l8["dates"] if d <= end]
     wait = wait_reason(l8, p30, day)
     scheduled, anchor, gap = [], day, 0

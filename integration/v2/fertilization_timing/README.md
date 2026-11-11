@@ -53,6 +53,9 @@ module prefixes (`job.`, `l2.`, `l6.`) were dropped; the code is otherwise uncha
 | `weather_sources.py`: `WeatherClient` (without `flight_confidence`), `load_env` (reads `.env` here) | `integration/krops_vari/weather.py` |
 | `fertilization_timing.py`: `wait_reason`, `KIESERITE_WAIT_DAYS` | `integration/krops_vari/spreading.py`, `config.py` (`min_days_mg_to_n`) |
 
+`krops_rules.py` keeps `CUT_WINDOW_AT_CLOSED_MONTH = True` as upstream: the schedule switches the cut off where it
+calls `l8_decision` (Rules and their status: Safe day).
+
 When one of these changes upstream, copy it over again: `cp weather/krops_rules.py integration/v2/fertilization_timing/`,
 and the matching functions by hand for the rest.
 
@@ -93,12 +96,12 @@ WeatherKit there is no forecast, so L8 has no safe day and every step waits: the
 |---|---|---|---|
 | Open month | average rain 100–300 mm; 60–100 mm `cek`; under 60 or over 300 `tunda` | proposal / decided 9 Oct 2026 | `krops_rules.py` `month_gate` |
 | Round months | open months 12 ÷ freq apart, highest in-band share; a tie goes to the earliest start | from `ml-integration` 154ac1f; the tie rule is this script's | `round_months` |
-| Round window | its month and the next one (Jan–Feb = 59 days) | GUESS, from the app design | `ROUND_WINDOW_MONTHS` |
-| Safe day | forecast day ≤ 25 mm, not the day before a heavy day, not the last forecast day, in an open month | proposal / decided 9 Oct 2026; the closed-month cut is pending | `krops_rules.l8_decision` |
+| Round window | its month and the next one (Jan–Feb = 59 days) | decided 11 Nov 2026 (from the app design) | `ROUND_WINDOW_MONTHS` |
+| Safe day | forecast day ≤ 25 mm, not the day before a heavy day, not the last forecast day, while today's month is open | proposal / decided 9 Oct 2026; no cut at a closed month: a safe day in the window's next month stays (decided 11 Nov 2026, `cut_at_closed_month=False`) | `krops_rules.l8_decision` |
 | Too dry | P30 under 60 mm → wait for rain | decided | `krops_rules.choose_p30`, `wait_reason` |
 | Order in a round | Dolomit/Kieserit → NPK → SP-36/KCl → Urea/ZA | practice | `PRODUCTS` |
-| After Dolomit | 14–28 days | the mechanism is peer-reviewed, the days are practice (below) | `DOLOMITE_WAIT_DAYS` |
-| After Kieserit | 1 day | GUESS (as in `integration/krops_vari/config.py`) | `KIESERITE_WAIT_DAYS` |
+| After Dolomit | 14–28 days | team decision (11 Nov 2026); the mechanism is peer-reviewed, the days are practice (below) | `DOLOMITE_WAIT_DAYS` |
+| After Kieserit | 1 day | decided 11 Nov 2026 (as in `integration/krops_vari/config.py`) | `KIESERITE_WAIT_DAYS` |
 | Before Urea/ZA | any later day | no source sets a gap from NPK, KCl or SP-36 | `BEFORE_N_STRAIGHT_WAIT_DAYS` |
 | Between other products | 1–7 days | GUESS, from the app design | `OTHER_WAIT_DAYS` |
 

@@ -202,6 +202,16 @@ class DailyTest(unittest.TestCase):
         self.assertEqual(first["daily"]["l8"]["state"], "tunda")
         self.assertEqual(first["steps"][0]["schedule"]["status"], "wait")
 
+    def test_safe_days_run_into_a_closed_month(self):
+        # on 28 Nov (open) the forecast runs into December (tunda): its safe days stay, no cut at a closed month
+        only_nov = {m: {**row, "gate": "open" if m == 11 else "cek"} for m, row in STAGE_A.items()}
+        today = date(2026, 11, 28)
+        schedule = ft.build_schedule(request(freq=1), only_nov, today,
+                                     daily_weather=weather(forecast_from(today, [1] * 10)))
+        l8 = schedule["rounds"][0]["daily"]["l8"]
+        self.assertEqual((l8["safe_days"][0], l8["safe_days"][-1]), ("2026-11-28", "2026-12-06"))
+        self.assertEqual(l8["removed"]["last_cached"], ["2026-12-07"])
+
     def test_no_forecast_waits_and_flags(self):
         today = date(2027, 1, 5)
         schedule = ft.build_schedule(BASIC, STAGE_A, today, daily_weather=weather({}, None, ["no keys"]))
