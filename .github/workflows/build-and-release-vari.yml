@@ -62,7 +62,7 @@ jobs:
           python3 Scripts/prepare-vari-engine.py \
             --runtime .build/prefix \
             --package-src integration/krops_vari \
-            --model-path segmentation/final_flow_ut1/yolo26m-krops-v0.1.mlpackage \
+            --model-path segmentation/iteration2/krops_model_v0.2_yolo26l.mlpackage \
             --weather-src weather \
             --version "${{ steps.vars.outputs.TAG }}" \
             --commit "${{ github.sha }}" \

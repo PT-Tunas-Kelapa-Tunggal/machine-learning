@@ -19,9 +19,10 @@ class GoldenDji10(unittest.TestCase):
 
         cls.want = json.loads(FIXTURE.read_text())
         photo = REPO / cls.want["photo"]
-        if not photo.is_file() or not Path(Settings().model_path).exists():
-            raise unittest.SkipTest("dji_10.jpg or the Core ML model is missing")
-        cls.got = json.loads(json.dumps(run_scan(photo, Settings())))  # through JSON, as the API returns it
+        v1_model = REPO / "segmentation" / "final_flow_ut1" / "yolo26m-krops-v0.1.mlpackage"
+        if not photo.is_file() or not v1_model.exists():
+            raise unittest.SkipTest("dji_10.jpg or the legacy v0.1 Core ML model is missing")
+        cls.got = json.loads(json.dumps(run_scan(photo, Settings(model_path=str(v1_model), conf_threshold=0.25))))  # through JSON, as the API returns it
 
     def test_zones_match_the_notebook(self):
         assert_close(self, self.got["zones"], self.want["zones"], "zones")

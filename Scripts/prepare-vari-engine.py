@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
     setenv("PYTHONPATH", pypath, 1);
 
     char model_path[PATH_MAX];
-    snprintf(model_path, sizeof(model_path), "%s/models/yolo26m-krops-v0.1.mlpackage", engine_dir);
+    snprintf(model_path, sizeof(model_path), "%s/models/krops_model_v0.2_yolo26l.mlpackage", engine_dir);
     setenv("KROPS_MODEL_PATH", model_path, 0);
 
     char weather_dir[PATH_MAX];
@@ -192,6 +192,12 @@ def main():
 
     # 2. Copy source code and Core ML model
     print("[2/6] Copying krops_vari, model, and weather rules...")
+    if model_path.name != "krops_model_v0.2_yolo26l.mlpackage":
+        sys.exit(
+            f"error: Expected model 'krops_model_v0.2_yolo26l.mlpackage', but got '{model_path.name}'. "
+            "Fallback to legacy models is strictly disabled."
+        )
+
     dest_package = engine_dir / 'krops_vari'
     shutil.copytree(
         package_src,

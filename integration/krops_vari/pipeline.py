@@ -19,6 +19,7 @@ from .config import Settings
 from .detection import Detector
 from .segmentation import segment_vegetation_exg
 from .spreading import spreading_plan
+from .v2_engine import run_v2_scan
 from .vari import stats_for_box, vari_map
 from .zoning import group_trees_into_zones, zone_records
 
