@@ -25,7 +25,7 @@ concurrency:
 jobs:
   build-and-release:
     name: Build & Package VariEngine
-    runs-on: macos-14 # Apple Silicon M1 runner
+    runs-on: macos-15
 
     steps:
       - name: Checkout Repository
