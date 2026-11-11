@@ -106,13 +106,26 @@ def boxes_to_trees(normalized_boxes, scores, width, height, settings):
         median_area = float(np.median([t["area"] for t in ref_pool]))
     else:
         median_w = median_h = median_area = 0.0
-    trees, skipped = [], 0
+    max_dim = getattr(settings, "max_tree_dimension_multiplier", 4.0)
+    max_area = getattr(settings, "max_tree_area_multiplier", 20.0)
+    trees, skipped, skipped_oversized = [], 0, 0
     for t in raw_trees:
         w_ratio = t["width"] / median_w if median_w > 0 else 1.0
         h_ratio = t["height"] / median_h if median_h > 0 else 1.0
         area_ratio = t["area"] / median_area if median_area > 0 else 1.0
-        if min(w_ratio, h_ratio, area_ratio) < settings.min_tree_completeness:
+        if (
+            w_ratio < settings.min_tree_completeness
+            or h_ratio < settings.min_tree_completeness
+            or area_ratio < settings.min_tree_completeness
+        ):
             skipped += 1
+            continue
+        if (
+            w_ratio > max_dim
+            or h_ratio > max_dim
+            or area_ratio > max_area
+        ):
+            skipped_oversized += 1
             continue
         t["tree_id"] = len(trees) + 1
         trees.append(t)
