@@ -1,0 +1,416 @@
+{
+ "schema_version": "1.0",
+ "plan_year": 2027,
+ "today": "2026-11-08",
+ "rounds_per_year": 2,
+ "rounds": [
+  {
+   "round": 1,
+   "start_month": 3,
+   "start_month_name": "Maret",
+   "end_month": 4,
+   "end_month_name": "April",
+   "start_date": "2027-03-01",
+   "end_date": "2027-04-30",
+   "status": "upcoming",
+   "days_until_start": 113,
+   "day_of_round": null,
+   "total_days": 61,
+   "card": {
+    "state": "upcoming",
+    "days_until_start": 113
+   },
+   "daily": null,
+   "steps": [
+    {
+     "step": 1,
+     "fertilizer_id": "A01C2E47-5D6B-4B95-9D31-6A1C8217D045",
+     "name": "Dolomite",
+     "display_name": "Dolomit",
+     "dose_kg": 47.53227613578696,
+     "annual_dose_kg": 95.06455227157392,
+     "bag_kg": 50,
+     "wait_after_days": {
+      "min": 14,
+      "max": 28,
+      "state": "idle",
+      "until": null
+     },
+     "card": {
+      "state": "locked"
+     }
+    },
+    {
+     "step": 2,
+     "fertilizer_id": "D828E19B-7B72-4E11-A35D-B1B7D2F9C304",
+     "name": "NPK",
+     "display_name": "NPK 15-15-15",
+     "dose_kg": 216.82794392595076,
+     "annual_dose_kg": 433.6558878519015,
+     "bag_kg": 50,
+     "wait_after_days": {
+      "min": 1,
+      "max": 7,
+      "state": "idle",
+      "until": null
+     },
+     "card": {
+      "state": "locked"
+     }
+    },
+    {
+     "step": 3,
+     "fertilizer_id": null,
+     "name": "NPK",
+     "display_name": "NPK 12-6-22-3",
+     "dose_kg": 200.0,
+     "annual_dose_kg": 400.0,
+     "bag_kg": 50.0,
+     "wait_after_days": {
+      "min": 1,
+      "max": 7,
+      "state": "idle",
+      "until": null
+     },
+     "card": {
+      "state": "locked"
+     }
+    },
+    {
+     "step": 4,
+     "fertilizer_id": null,
+     "name": "NPK",
+     "display_name": "NPK 13-6-27-4",
+     "dose_kg": 225.0,
+     "annual_dose_kg": 450.0,
+     "bag_kg": 50.0,
+     "wait_after_days": {
+      "min": 1,
+      "max": 7,
+      "state": "idle",
+      "until": null
+     },
+     "card": {
+      "state": "locked"
+     }
+    },
+    {
+     "step": 5,
+     "fertilizer_id": null,
+     "name": "NPK",
+     "display_name": "NPK 13-8-27-4",
+     "dose_kg": 225.0,
+     "annual_dose_kg": 450.0,
+     "bag_kg": 50.0,
+     "wait_after_days": {
+      "min": 1,
+      "max": 7,
+      "state": "idle",
+      "until": null
+     },
+     "card": {
+      "state": "locked"
+     }
+    },
+    {
+     "step": 6,
+     "fertilizer_id": null,
+     "name": "NPK",
+     "display_name": "NPK 16-16-16",
+     "dose_kg": 203.27619743057883,
+     "annual_dose_kg": 406.55239486115767,
+     "bag_kg": 50.0,
+     "wait_after_days": {
+      "min": 1,
+      "max": null,
+      "state": "idle",
+      "until": null
+     },
+     "card": {
+      "state": "locked"
+     }
+    },
+    {
+     "step": 7,
+     "fertilizer_id": null,
+     "name": "Urea",
+     "display_name": "Urea",
+     "dose_kg": 1.1257727856094668,
+     "annual_dose_kg": 2.2515455712189336,
+     "bag_kg": 50.0,
+     "wait_after_days": null,
+     "card": {
+      "state": "locked"
+     }
+    }
+   ]
+  },
+  {
+   "round": 2,
+   "start_month": 9,
+   "start_month_name": "September",
+   "end_month": 10,
+   "end_month_name": "Oktober",
+   "start_date": "2027-09-01",
+   "end_date": "2027-10-31",
+   "status": "upcoming",
+   "days_until_start": 297,
+   "day_of_round": null,
+   "total_days": 61,
+   "card": {
+    "state": "upcoming",
+    "days_until_start": 297
+   },
+   "daily": null,
+   "steps": [
+    {
+     "step": 1,
+     "fertilizer_id": "A01C2E47-5D6B-4B95-9D31-6A1C8217D045",
+     "name": "Dolomite",
+     "display_name": "Dolomit",
+     "dose_kg": 47.53227613578696,
+     "annual_dose_kg": 95.06455227157392,
+     "bag_kg": 50,
+     "wait_after_days": {
+      "min": 14,
+      "max": 28,
+      "state": "idle",
+      "until": null
+     },
+     "card": {
+      "state": "locked"
+     }
+    },
+    {
+     "step": 2,
+     "fertilizer_id": "D828E19B-7B72-4E11-A35D-B1B7D2F9C304",
+     "name": "NPK",
+     "display_name": "NPK 15-15-15",
+     "dose_kg": 216.82794392595076,
+     "annual_dose_kg": 433.6558878519015,
+     "bag_kg": 50,
+     "wait_after_days": {
+      "min": 1,
+      "max": 7,
+      "state": "idle",
+      "until": null
+     },
+     "card": {
+      "state": "locked"
+     }
+    },
+    {
+     "step": 3,
+     "fertilizer_id": null,
+     "name": "NPK",
+     "display_name": "NPK 12-6-22-3",
+     "dose_kg": 200.0,
+     "annual_dose_kg": 400.0,
+     "bag_kg": 50.0,
+     "wait_after_days": {
+      "min": 1,
+      "max": 7,
+      "state": "idle",
+      "until": null
+     },
+     "card": {
+      "state": "locked"
+     }
+    },
+    {
+     "step": 4,
+     "fertilizer_id": null,
+     "name": "NPK",
+     "display_name": "NPK 13-6-27-4",
+     "dose_kg": 225.0,
+     "annual_dose_kg": 450.0,
+     "bag_kg": 50.0,
+     "wait_after_days": {
+      "min": 1,
+      "max": 7,
+      "state": "idle",
+      "until": null
+     },
+     "card": {
+      "state": "locked"
+     }
+    },
+    {
+     "step": 5,
+     "fertilizer_id": null,
+     "name": "NPK",
+     "display_name": "NPK 13-8-27-4",
+     "dose_kg": 225.0,
+     "annual_dose_kg": 450.0,
+     "bag_kg": 50.0,
+     "wait_after_days": {
+      "min": 1,
+      "max": 7,
+      "state": "idle",
+      "until": null
+     },
+     "card": {
+      "state": "locked"
+     }
+    },
+    {
+     "step": 6,
+     "fertilizer_id": null,
+     "name": "NPK",
+     "display_name": "NPK 16-16-16",
+     "dose_kg": 203.27619743057883,
+     "annual_dose_kg": 406.55239486115767,
+     "bag_kg": 50.0,
+     "wait_after_days": {
+      "min": 1,
+      "max": null,
+      "state": "idle",
+      "until": null
+     },
+     "card": {
+      "state": "locked"
+     }
+    },
+    {
+     "step": 7,
+     "fertilizer_id": null,
+     "name": "Urea",
+     "display_name": "Urea",
+     "dose_kg": 1.1257727856094668,
+     "annual_dose_kg": 2.2515455712189336,
+     "bag_kg": 50.0,
+     "wait_after_days": null,
+     "card": {
+      "state": "locked"
+     }
+    }
+   ]
+  }
+ ],
+ "weather_basis": {
+  "rule": "L8 Stage A: a month is open when its average rain is 100–300 mm (weather/krops_rules.py); rounds go in open months 6 months apart, the set with the highest in-band (100–200 mm) share",
+  "period": [
+   1991,
+   2020
+  ],
+  "months": {
+   "1": {
+    "name": "Januari",
+    "avg_mm": 215.7,
+    "in_band_share": 0.4,
+    "gate": "open"
+   },
+   "2": {
+    "name": "Februari",
+    "avg_mm": 107.9,
+    "in_band_share": 0.367,
+    "gate": "open"
+   },
+   "3": {
+    "name": "Maret",
+    "avg_mm": 171.5,
+    "in_band_share": 0.367,
+    "gate": "open"
+   },
+   "4": {
+    "name": "April",
+    "avg_mm": 205.4,
+    "in_band_share": 0.433,
+    "gate": "open"
+   },
+   "5": {
+    "name": "Mei",
+    "avg_mm": 207.1,
+    "in_band_share": 0.4,
+    "gate": "open"
+   },
+   "6": {
+    "name": "Juni",
+    "avg_mm": 174.5,
+    "in_band_share": 0.7,
+    "gate": "open"
+   },
+   "7": {
+    "name": "Juli",
+    "avg_mm": 172.5,
+    "in_band_share": 0.433,
+    "gate": "open"
+   },
+   "8": {
+    "name": "Agustus",
+    "avg_mm": 167.9,
+    "in_band_share": 0.567,
+    "gate": "open"
+   },
+   "9": {
+    "name": "September",
+    "avg_mm": 162.9,
+    "in_band_share": 0.6,
+    "gate": "open"
+   },
+   "10": {
+    "name": "Oktober",
+    "avg_mm": 209.7,
+    "in_band_share": 0.333,
+    "gate": "open"
+   },
+   "11": {
+    "name": "November",
+    "avg_mm": 298.8,
+    "in_band_share": 0.1,
+    "gate": "open"
+   },
+   "12": {
+    "name": "Desember",
+    "avg_mm": 318.7,
+    "in_band_share": 0.1,
+    "gate": "tunda"
+   }
+  },
+  "candidate_sets": [
+   {
+    "months": [
+     "Januari",
+     "Juli"
+    ],
+    "in_band_share": 0.833
+   },
+   {
+    "months": [
+     "Februari",
+     "Agustus"
+    ],
+    "in_band_share": 0.934
+   },
+   {
+    "months": [
+     "Maret",
+     "September"
+    ],
+    "in_band_share": 0.967
+   },
+   {
+    "months": [
+     "April",
+     "Oktober"
+    ],
+    "in_band_share": 0.766
+   },
+   {
+    "months": [
+     "Mei",
+     "November"
+    ],
+    "in_band_share": 0.5
+   }
+  ],
+  "note": "climate averages (1991–2020) set the months; the days inside an active round's window come from the 10-day forecast (L8 Stage B) and P30 (L5), in that round's `daily`"
+ },
+ "flags": [
+  "NPK 12-6-22-3: no id, so it can't be marked as spread",
+  "NPK 13-6-27-4: no id, so it can't be marked as spread",
+  "NPK 13-8-27-4: no id, so it can't be marked as spread",
+  "NPK 16-16-16: no id, so it can't be marked as spread",
+  "Urea: no id, so it can't be marked as spread"
+ ]
+}

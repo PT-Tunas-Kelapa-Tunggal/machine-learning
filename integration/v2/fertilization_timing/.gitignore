@@ -1,0 +1,7 @@
+# the climate cache (data/weather_cache/cells/<cell>/climate.json): fetched once per cell a year.
+# The trial site's cell is committed so a fresh copy runs the examples without NASA POWER.
+/data/**
+!/data/**/
+!/data/weather_cache/cells/n1.000_e104.3750/climate.json
+# WeatherKit keys
+.env

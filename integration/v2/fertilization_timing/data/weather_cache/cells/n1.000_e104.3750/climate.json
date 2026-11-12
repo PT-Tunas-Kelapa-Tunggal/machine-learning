@@ -1,0 +1,83 @@
+{
+ "computed_on": "2026-10-26",
+ "period": [
+  1991,
+  2020
+ ],
+ "normals_mm": {
+  "1": 181.7,
+  "2": 94.2,
+  "3": 153.5,
+  "4": 204.5,
+  "5": 210.1,
+  "6": 161.5,
+  "7": 183.7,
+  "8": 166.7,
+  "9": 167.8,
+  "10": 210.8,
+  "11": 289.8,
+  "12": 311.5
+ },
+ "stage_a": {
+  "1": {
+   "avg_mm": 215.7,
+   "in_band_share": 0.4,
+   "gate": "open"
+  },
+  "2": {
+   "avg_mm": 107.9,
+   "in_band_share": 0.367,
+   "gate": "open"
+  },
+  "3": {
+   "avg_mm": 171.5,
+   "in_band_share": 0.367,
+   "gate": "open"
+  },
+  "4": {
+   "avg_mm": 205.4,
+   "in_band_share": 0.433,
+   "gate": "open"
+  },
+  "5": {
+   "avg_mm": 207.1,
+   "in_band_share": 0.4,
+   "gate": "open"
+  },
+  "6": {
+   "avg_mm": 174.5,
+   "in_band_share": 0.7,
+   "gate": "open"
+  },
+  "7": {
+   "avg_mm": 172.5,
+   "in_band_share": 0.433,
+   "gate": "open"
+  },
+  "8": {
+   "avg_mm": 167.9,
+   "in_band_share": 0.567,
+   "gate": "open"
+  },
+  "9": {
+   "avg_mm": 162.9,
+   "in_band_share": 0.6,
+   "gate": "open"
+  },
+  "10": {
+   "avg_mm": 209.7,
+   "in_band_share": 0.333,
+   "gate": "open"
+  },
+  "11": {
+   "avg_mm": 298.8,
+   "in_band_share": 0.1,
+   "gate": "open"
+  },
+  "12": {
+   "avg_mm": 318.7,
+   "in_band_share": 0.1,
+   "gate": "tunda"
+  }
+ }
+}

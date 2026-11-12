@@ -1,0 +1,5 @@
+# Python 3.9+. The schedule and its tests need only the standard library; these are for the weather.
+requests  # NASA POWER climate and P30, WeatherKit
+pyjwt  # WeatherKit token (daily weather only)
+cryptography  # pyjwt's ES256
+python-dotenv  # reads .env; optional when the WK_* variables are set another way
