@@ -2684,7 +2684,8 @@ def run_v2_scan(
             tree_records.append({
                 "tree_id": tree["tree_id"],
                 "confidence": tree["confidence"],
-                "bbox": tree["bbox_annotation"],
+                "bounding_box_pixels": tree["bbox_annotation"],
+                "bbox": tree["bbox_annotation"],  # Backward-compatible alias
                 "vari": tree["vari"],
             })
     # Get ExG mask pixels inside this tree's detection area
@@ -2733,6 +2734,7 @@ def run_v2_scan(
             "zone_id": zone["zone_id"],
             "approx_row": zone["approx_row"],
             "tree_count": len(tree_records),
+            "tree_ids": [tree_record["tree_id"] for tree_record in tree_records],
             "bbox": pixel_bbox_record(zb, width, height),
             "vari": zone_stats,
             "trees": tree_records,
@@ -3207,7 +3209,7 @@ def run_v2_scan(
             "row_tolerance_multiplier": ROW_TOLERANCE_MULTIPLIER,
             "detected_tree_count": len(trees),
             "zone_count": len(zone_json),
-            "coordinate_system": "Pixel coordinates use origin (0,0) at top-left; bbox x1,y1 inclusive-ish and x2,y2 exclusive crop boundary; center_point and center provide (x, y) coordinates for each zone based on the white-separator zoning image. normalized_xyxy and normalized_x/y values are divided by original image width/height.",
+            "coordinate_system": "Pixel coordinates use origin (0,0) at top-left; each zone's tree_ids and trees list represent membership assigned by the zoning algorithm; each tree bounding_box_pixels uses x1,y1 inclusive-ish and x2,y2 exclusive crop boundary, with width, height, and normalized_xyxy divided by original image width/height. White separator lines visualize the zone partition and do not independently determine tree membership.",
             "limitations": [
                 "ExG is a heuristic vegetation mask and may include weeds or omit shaded palm leaves.",
                 "Zone confidence is a heuristic from tree count and ExG leaf-pixel coverage; notebook parameters marked GUESS require calibration against field observations.",
