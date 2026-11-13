@@ -25,7 +25,7 @@ concurrency:
 jobs:
   build-and-release:
     name: Build & Package VariEngine
-    runs-on: macos-14 # Apple Silicon M1 runner
+    runs-on: macos-15
 
     steps:
       - name: Checkout Repository
@@ -62,13 +62,31 @@ jobs:
           python3 Scripts/prepare-vari-engine.py \
             --runtime .build/prefix \
             --package-src integration/krops_vari \
-            --model-path segmentation/final_flow_ut1/yolo26m-krops-v0.1.mlpackage \
+            --model-path segmentation/iteration2/krops_model_v0.2_yolo26l.mlpackage \
             --weather-src weather \
+            --timing-src integration/v2/fertilization_timing \
             --version "${{ steps.vars.outputs.TAG }}" \
             --commit "${{ github.sha }}" \
             --output .build/dist
           rm -rf .build/prefix
+
+      - name: Verify Packaged Executables
+        run: |
           .build/dist/VariPython -m krops_vari.main --check
+          .build/dist/VariPython -m krops_vari.timing --help
+          .build/dist/VariPython -m krops_vari.timing \
+            --request integration/v2/fertilization_timing/example_request.json \
+            --today 2026-11-08 \
+            --no-daily \
+            --out .build/timing_plain.json
+          .build/dist/VariPython -m krops_vari.timing \
+            --request integration/v2/fertilization_timing/example_request_in_progress.json \
+            --today 2027-01-19 \
+            --no-daily \
+            --out .build/timing_in_progress.json
+          .build/dist/VariPython -m unittest discover -s integration/v2/fertilization_timing
+          .build/dist/VariPython -m unittest integration/tests/test_timing_cli.py
+          rm -f .build/timing_plain.json .build/timing_in_progress.json
 
       - name: Compress & Checksum Archive
         run: |

@@ -4,13 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "krops-vari"
-version = "0.1.0"
-description = "Krops VARI backend: zones, confidence, Mg/N boost and the spreading plan from one drone photo"
+version = "0.2.0"
+description = "Krops VARI backend: zones, confidence, Mg/N boost and fertilizer allocation from one drone photo"
 requires-python = ">=3.11"
 dependencies = [
     "numpy",
     "opencv-python",
     "pillow",
+    "matplotlib",
+    "pandas",
     "coremltools; sys_platform == 'darwin'",
     "requests",
     "pyjwt",

@@ -14,18 +14,49 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 
 
-def _resolve_model_path() -> Path:
-    if env_path := os.getenv("KROPS_MODEL_PATH"):
-        return Path(env_path)
-    # Check bundled location: <VariEngine>/models/yolo26m-krops-v0.1.mlpackage
-    bundled = Path(__file__).resolve().parent.parent / "models" / "yolo26m-krops-v0.1.mlpackage"
+CONCRETE_MODEL_NAME = "krops_model_v0.2_yolo26l.mlpackage"
+
+
+def resolve_model_path() -> Path:
+    """Strictly resolve the concrete Core ML model path. Fallback to legacy models is disabled."""
+    # 1. Bundled inside VariEngine distribution: <VariEngine>/models/krops_model_v0.2_yolo26l.mlpackage
+    bundled = Path(__file__).resolve().parent.parent / "models" / CONCRETE_MODEL_NAME
     if bundled.exists():
         return bundled
-    # Check development repo location
-    return REPO / "segmentation" / "final_flow_ut1" / "yolo26m-krops-v0.1.mlpackage"
+    # 2. Environment override if explicitly set
+    if env_path := os.getenv("KROPS_MODEL_PATH"):
+        p = Path(env_path)
+        if p.name != CONCRETE_MODEL_NAME:
+            raise FileNotFoundError(
+                f"KROPS_MODEL_PATH is set to '{env_path}', but model must be '{CONCRETE_MODEL_NAME}'. "
+                "Fallback to legacy or other models is strictly disabled."
+            )
+        if not p.exists():
+            raise FileNotFoundError(
+                f"Core ML model '{CONCRETE_MODEL_NAME}' specified by KROPS_MODEL_PATH does not exist at '{env_path}'."
+            )
+        return p
+    # 3. Development repository locations
+    repo_path = REPO / "segmentation" / "iteration2" / CONCRETE_MODEL_NAME
+    if repo_path.exists():
+        return repo_path
+    repo_v2_path = REPO / "integration" / "v2" / "fertlizer_calculations" / CONCRETE_MODEL_NAME
+    if repo_v2_path.exists():
+        return repo_v2_path
+    raise FileNotFoundError(
+        f"Required Core ML model '{CONCRETE_MODEL_NAME}' was not found. "
+        "Fallback to legacy models is strictly disabled."
+    )
 
 
-DEFAULT_MODEL_PATH = _resolve_model_path()
+def get_default_model_path() -> Path:
+    try:
+        return resolve_model_path()
+    except FileNotFoundError:
+        return REPO / "segmentation" / "iteration2" / CONCRETE_MODEL_NAME
+
+
+DEFAULT_MODEL_PATH = get_default_model_path()
 MG_PER_MGO = 24.305 / 40.304
 
 
@@ -33,10 +64,12 @@ MG_PER_MGO = 24.305 / 40.304
 class Settings:
     # ---- detection (Core ML)
     model_path: str = str(DEFAULT_MODEL_PATH)
-    conf_threshold: float = 0.25          # discard detections under this score
+    conf_threshold: float = 0.10          # YOLO26l confidence cutoff
     iou_threshold: float = 0.45           # non-maximum suppression overlap
     model_input_size: int = 640           # square model input, px
     min_tree_completeness: float = 0.70   # keep a tree only if width, height and area are each ≥ 70% of the median
+    max_tree_dimension_multiplier: float = 4.0  # reject extreme boxes wider/taller than 4x robust median
+    max_tree_area_multiplier: float = 20.0      # reject extreme boxes with area > 20x robust median
     border_margin_px: int = 5             # a box this close to the edge doesn't set the typical tree size
 
     # ---- zoning
