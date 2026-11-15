@@ -38,6 +38,20 @@ class MainCliTests(unittest.TestCase):
             cli.main([])
         self.assertEqual(exc.exception.code, 2)
 
+    def test_scan_reports_success_and_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / "image.jpg"
+            image.touch()
+            args = ["--image", str(image), "--user-request-submission-json", "{}"]
+            with patch.object(cli, "run_v2_scan", return_value={"image": {"trees": 1}, "zones": [{}]}):
+                with contextlib.redirect_stderr(io.StringIO()) as stderr:
+                    self.assertEqual(cli.main(args), 0)
+                self.assertIn("VARI scan complete: 1 trees, 1 zones", stderr.getvalue())
+            with patch.object(cli, "run_v2_scan", side_effect=RuntimeError("scan failed")):
+                with contextlib.redirect_stderr(io.StringIO()) as stderr:
+                    self.assertEqual(cli.main(args), 1)
+                self.assertIn("Error: VARI scan failed: scan failed", stderr.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

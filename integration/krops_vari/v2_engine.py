@@ -65,12 +65,9 @@ def run_v2_scan(image_path: str | Path, user_submission_data: dict | str,
     import matplotlib.cm as cm
     import matplotlib.colors as mcolors
 
-    try:
-        from IPython.display import HTML
-    except ImportError:
-        class HTML:
-            def __init__(self, data=None, *args, **kwargs):
-                self.data = data
+    class HTML:
+        def __init__(self, data=None, *args, **kwargs):
+            self.data = data
 
     # Notebook-only rich displays are suppressed in standalone mode.
     def display(*_args, **_kwargs):
@@ -3478,7 +3475,7 @@ def run_v2_scan(image_path: str | Path, user_submission_data: dict | str,
     import html as _npk_html
     from contextlib import redirect_stdout as _npk_redirect_stdout
     from io import StringIO as _NPKStringIO
-    from IPython.display import display as _npk_display, HTML as _NPKHTML
+    _npk_display, _NPKHTML = display, HTML
     from datetime import date as _npk_date
 
     # Fallback values are used if the submission contains no usable NPK dose.
@@ -5298,7 +5295,7 @@ def run_v2_scan(image_path: str | Path, user_submission_data: dict | str,
 
     # ===== Notebook code cell 58 =====
     # Compact recap of the input, zone-level product quantities, and NPK budget fit.
-    from IPython.display import display as _overview_display, HTML as _OverviewHTML
+    _overview_display, _OverviewHTML = display, HTML
     import html as _overview_html
     import math as _overview_math
     import re as _overview_re
@@ -5605,4 +5602,3 @@ def run_v2_scan(image_path: str | Path, user_submission_data: dict | str,
 
     print(f"Dual JSON written: {vari_result_path.resolve()} and {Path(OUTPUT_JSON).resolve()}")
     return vari_result
-
