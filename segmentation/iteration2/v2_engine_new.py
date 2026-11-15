@@ -1,26 +1,20 @@
 #!/usr/bin/env python3
-"""Oil-palm zoning, VARI, and fertilizer analysis converted from new_readable.ipynb.
+"""Oil-palm zoning, VARI, and fertilizer analysis exported from the current notebook.
 
-Run from the project root and pass the full submission JSON as one option value, plus the image path:
-    python outputs/new_readable.py --user-request-submission-json '{"farm":{"areaHa":1.0},"fertilizerHistory":{"freq":2,"fertilizers":[]}}' --image webodm_new_2nd_flight.jpeg
+Run from the project folder with the complete submission JSON and image path:
+    python new_readable.py --user-request-submission-json '{"farm":{"areaHa":1.0},"fertilizerHistory":{"freq":2,"fertilizers":[]}}' --image webodm_flight.jpeg
 
-The CoreML model path is configured by the MODEL_PATH constant below; it is not a CLI argument.
+The CoreML model path remains configured by MODEL_PATH in this script.
 """
-
 import argparse as _cli_argparse
 import json as _cli_json
 
-_cli_parser = _cli_argparse.ArgumentParser(description="Run the oil-palm VARI and fertilizer analysis.")
+_cli_parser = _cli_argparse.ArgumentParser(description="Run oil-palm VARI, zoning, and fertilizer analysis.")
 _cli_parser.add_argument(
-    "--user-request-submission-json",
-    required=True,
-    help="The complete user submission as a single JSON string (not a path to a JSON file).",
+    "--user-request-submission-json", required=True,
+    help="Complete user submission as one JSON string (not a path to a JSON file).",
 )
-_cli_parser.add_argument(
-    "--image",
-    required=True,
-    help="Path to the input RGB/WebODM image.",
-)
+_cli_parser.add_argument("--image", required=True, help="Path to the input RGB/WebODM image.")
 _cli_args = _cli_parser.parse_args()
 try:
     _USER_SUBMISSION_DATA = _cli_json.loads(_cli_args.user_request_submission_json)
@@ -29,17 +23,14 @@ except _cli_json.JSONDecodeError as _json_error:
 if not isinstance(_USER_SUBMISSION_DATA, dict):
     raise SystemExit("The submission JSON argument must decode to a JSON object.")
 
-
 # # Oil-palm zoning and VARI analysis
 #
 # This notebook processes a WebODM RGB image into tree detections, zones, VARI summaries, fertilizer calculations, and output images/files.
 #
-# Run the notebook **from top to bottom**. Set the image/model paths and calculation settings in the configuration cell first. Generated images, JSON/CSV files, and zone-crop folders are saved under `outputs/`. Each numbered section below has its own code cell so you can follow the pipeline stage by stage.
+# Run the notebook **from top to bottom**. Set the image/model paths and calculation settings in the configuration cell first. Generated images, JSON/CSV files, and zone-crop folders are saved under `outputs/`. Each numbered section below has its own code cell so you can follow the pipeline stage by stage. Large images are detected with overlapping 1920×1080 crops, then tile detections are merged into full-image coordinates before downstream analysis.
 # **Flight confidence:** with actual flight times and farm coordinates configured, the notebook scores sun, cloud, pre-flight rain, and 30-day rainfall; that score feeds the existing zone/field confidence calculation.
 
-
 # ## Imports
-
 
 # ===== Notebook code cell 2 =====
 import csv
@@ -71,14 +62,13 @@ import matplotlib.colors as mcolors
 
 from IPython.display import HTML
 
-# Standalone runs save plots/images to disk but never open viewer windows.
+# Notebook-only rich displays are suppressed in standalone mode.
 def display(*_args, **_kwargs):
     return None
 
 # ## Configuration
 #
 # Edit the input paths, output paths, detection settings, zoning rules, and fertilizer settings here.
-
 
 # ===== Notebook code cell 4 =====
 # ------------------------- Configuration -------------------------
@@ -97,7 +87,7 @@ OUTPUT_TREE_VARI_HEATMAP_DIR = str(OUTPUT_DIR / "oil_palm_tree_vari_heatmaps")  
 OUTPUT_TREE_VARI_HEATMAP_MONTAGE = str(OUTPUT_DIR / "oil_palm_tree_vari_heatmap_montage.png")  # Tiled preview of all per-tree heatmaps.
 OUTPUT_FIELD_TREE_VARI_QUARTILE = str(OUTPUT_DIR / "oil_palm_field_tree_vari_quartiles.jpg")  # Full-field tree overlay colored by each tree's VARI quartile.
 
-# Submission is provided as one JSON-string command-line argument (not loaded from a file).
+# Submission is supplied as a complete JSON string through --user-request-submission-json.
 UI_SUBMISSION_DATA = _USER_SUBMISSION_DATA
 UI_FARM_INPUT = UI_SUBMISSION_DATA.get("farm", {})
 FERTILIZER_BUDGET_RP = UI_SUBMISSION_DATA.get("fertilizerBudgetRp")  # Optional annual fertilizer budget in Indonesian Rupiah.
@@ -141,6 +131,9 @@ OUTPUT_VARI_DISTRIBUTION = str(OUTPUT_DIR / "oil_palm_vari_distribution.png")  #
 CONF_THRESHOLD = 0.10  # Temporary recall-focused cutoff; inspect lower-confidence detections for false positives.
 IOU_THRESHOLD = 0.45  # Non-maximum suppression overlap threshold for removing duplicate detections.
 MODEL_INPUT_SIZE = 640  # Width and height, in pixels, of the square image passed to the CoreML model.
+INFERENCE_TILE_WIDTH_PX = 1920  # Maximum crop width for large-image CoreML inference.
+INFERENCE_TILE_HEIGHT_PX = 1080  # Maximum crop height for large-image CoreML inference.
+INFERENCE_TILE_OVERLAP_FRACTION = 0.10  # Overlap tiles by 10% to reduce trees cut at crop edges.
 ZONE_GRID_ROWS = 3  # Target number of palm rows grouped into one zone band.
 ZONE_GRID_COLS = 3  # Target number of palms per row within a zone; nominal capacity is rows × columns.
 TREES_PER_ZONE = ZONE_GRID_ROWS * ZONE_GRID_COLS  # Nominal tree capacity used to mark zones as undersized.
@@ -152,7 +145,7 @@ MIN_TREE_COMPLETENESS = 0.70  # Keep a detection only if its width, height, and 
 MAX_TREE_DIMENSION_MULTIPLIER = 4.0  # Reject extreme boxes wider or taller than 4× the robust typical tree box.
 MAX_TREE_AREA_MULTIPLIER = 20.0  # Reject extreme boxes with area greater than 20× the robust typical tree-box area.
 BORDER_MARGIN_PX = 5  # Exclude detections whose bounding boxes come within 5 pixels of any image edge.
-SHOW_PLOTS = True  # Display the generated pipeline figure interactively after saving it.
+SHOW_PLOTS = False  # Display the generated pipeline figure interactively after saving it.
 # If the spread between zone-mean VARI P95 and P25 is at or below this
 # configured absolute VARI gap, use the P25-derived boost across all zones.
 # Tune this threshold for the imagery and management policy; set to 0.0 to
@@ -197,8 +190,8 @@ FERTILIZER_PRODUCT_NUTRIENT_FRACTIONS = {
 # Annual base product rates, kept separate from VARI-derived supplements.
 # These fixed defaults are used regardless of Kieserite or Dolomite entries in
 # the submitted fertilizer history. Units are kg product/palm/year.
-DEFAULT_KIESERITE_BASE_KG_PER_PALM_PER_YEAR = 1.0
-DEFAULT_DOLOMITE_BASE_KG_PER_PALM_PER_YEAR = 1.0
+DEFAULT_KIESERITE_BASE_KG_PER_PALM_PER_YEAR = 2.0
+DEFAULT_DOLOMITE_BASE_KG_PER_PALM_PER_YEAR = 2.0
 KIESERITE_BASE_PRODUCT_KG_PER_PALM_PER_YEAR = DEFAULT_KIESERITE_BASE_KG_PER_PALM_PER_YEAR
 KIESERITE_BASE_RATE_SOURCE = "configured default; user fertilizer history ignored"
 DOLOMITE_BASE_PRODUCT_KG_PER_PALM_PER_YEAR = DEFAULT_DOLOMITE_BASE_KG_PER_PALM_PER_YEAR
@@ -279,7 +272,6 @@ MIN_REFERENCE_ZONES_SUGGESTED = 5  # Emit a metadata note when fewer valid refer
 # ## Shared analysis functions
 #
 # These helper functions handle detections, tree filtering, zoning, and pixel-coordinate records.
-
 
 # ===== Notebook code cell 6 =====
 def iou(box1, box2):
@@ -362,6 +354,94 @@ def parse_coreml_predictions(model, rgb_image):
     keep = nms(boxes, scores, IOU_THRESHOLD)
     return [boxes[i] for i in keep], [scores[i] for i in keep]
 
+
+
+def _inference_tile_starts(image_length, tile_length, overlap_fraction):
+    """Return edge-aligned origins; images smaller than a tile use one crop."""
+    if image_length <= tile_length:
+        return [0]
+    overlap_px = int(round(tile_length * overlap_fraction))
+    stride = max(1, tile_length - overlap_px)
+    starts = list(range(0, image_length - tile_length + 1, stride))
+    final_start = image_length - tile_length
+    if starts[-1] != final_start:
+        starts.append(final_start)
+    return starts
+
+
+def parse_coreml_predictions_tiled(
+    model,
+    rgb_image,
+    tile_width=INFERENCE_TILE_WIDTH_PX,
+    tile_height=INFERENCE_TILE_HEIGHT_PX,
+    overlap_fraction=INFERENCE_TILE_OVERLAP_FRACTION,
+):
+    """Infer on overlapping image tiles, merge boxes in full-image coordinates.
+
+    The existing per-tile parser handles model preprocessing and local NMS.
+    Returned boxes are normalized xyxy coordinates relative to the full image,
+    so downstream code can use them exactly like whole-image predictions.
+    """
+    image_height, image_width = rgb_image.shape[:2]
+    if tile_width < 1 or tile_height < 1:
+        raise ValueError("Inference tile dimensions must be positive.")
+    if not 0.0 <= overlap_fraction < 1.0:
+        raise ValueError("Inference tile overlap fraction must be in [0, 1).")
+
+    all_global_boxes_px = []
+    all_scores = []
+    tile_records = []
+    tile_index = 0
+    x_origins = _inference_tile_starts(image_width, tile_width, overlap_fraction)
+    y_origins = _inference_tile_starts(image_height, tile_height, overlap_fraction)
+
+    for y1 in y_origins:
+        for x1 in x_origins:
+            x2 = min(x1 + tile_width, image_width)
+            y2 = min(y1 + tile_height, image_height)
+            tile_rgb = rgb_image[y1:y2, x1:x2]
+            tile_h, tile_w = tile_rgb.shape[:2]
+            tile_boxes, tile_scores = parse_coreml_predictions(model, tile_rgb)
+            tile_index += 1
+            tile_records.append({
+                "tile_index": tile_index,
+                "x1": int(x1), "y1": int(y1),
+                "x2": int(x2), "y2": int(y2),
+                "detections_after_tile_nms": len(tile_boxes),
+            })
+            for box, score in zip(tile_boxes, tile_scores):
+                global_box = [
+                    max(0.0, min(float(image_width), x1 + box[0] * tile_w)),
+                    max(0.0, min(float(image_height), y1 + box[1] * tile_h)),
+                    max(0.0, min(float(image_width), x1 + box[2] * tile_w)),
+                    max(0.0, min(float(image_height), y1 + box[3] * tile_h)),
+                ]
+                if global_box[2] > global_box[0] and global_box[3] > global_box[1]:
+                    all_global_boxes_px.append(global_box)
+                    all_scores.append(float(score))
+
+    # A second NMS removes duplicate detections from overlapping neighboring tiles.
+    keep = nms(all_global_boxes_px, all_scores, IOU_THRESHOLD)
+    merged_normalized_boxes = [
+        [
+            all_global_boxes_px[i][0] / image_width,
+            all_global_boxes_px[i][1] / image_height,
+            all_global_boxes_px[i][2] / image_width,
+            all_global_boxes_px[i][3] / image_height,
+        ]
+        for i in keep
+    ]
+    merged_scores = [all_scores[i] for i in keep]
+    summary = {
+        "tile_count": tile_index,
+        "tile_width_px": int(tile_width),
+        "tile_height_px": int(tile_height),
+        "overlap_fraction": float(overlap_fraction),
+        "detections_before_global_nms": len(all_global_boxes_px),
+        "detections_after_global_nms": len(merged_normalized_boxes),
+        "tiles": tile_records,
+    }
+    return merged_normalized_boxes, merged_scores, summary
 
 def normalized_box_to_pixels(box, width, height):
     x1, y1, x2, y2 = box
@@ -574,7 +654,6 @@ def show_preview_table(title, headers, rows):
 # ## Zone summary and nutrient calculations
 #
 # Functions for the annual zone table and its detailed nutrient calculation output.
-
 
 # ===== Notebook code cell 8 =====
 def print_zone_vari_table(zone_json):
@@ -798,7 +877,6 @@ def print_zone_vari_table(zone_json):
     print("Values above are additional annual elemental Mg or N supplements, not full product rates or full fertilizer-program totals.")
 
 # ## CSV and fertilizer product-mass outputs
-
 
 # ===== Notebook code cell 10 =====
 OUTPUT_DECIMALS = globals().get("OUTPUT_DECIMALS", 6)  # Fallback for running this output cell before the main config cell.
@@ -1163,7 +1241,6 @@ def save_product_mass_csv(rows, output_path):
 
 # ## VARI distribution plot
 
-
 # ===== Notebook code cell 12 =====
 def save_vari_distribution_plot(zone_json, output_path):
     """Plot zone mean VARI values and identify which fall from P25 to P95."""
@@ -1215,7 +1292,6 @@ def save_vari_distribution_plot(zone_json, output_path):
 # ## Zone confidence, area, and boost calculations
 #
 # The confidence factors and reference-zone rules are defined here; the steps below call these functions.
-
 
 # ===== Notebook code cell 14 =====
 def load_zone_areas():
@@ -1530,7 +1606,6 @@ def add_zone_boost_and_fertilizer(zone_json, image_size=None):
 # This section uses the four-factor rule from `vari_confidence.ipynb`: lowest sun elevation × cloud × wet-leaf/rain × recent-water (P30). The score is calculated before zone confidence, then feeds the existing zone and field confidence calculation. WeatherKit is used when configured; NASA POWER supplies documented fallbacks. Unknown inputs remain unknown and make the result non-final.
 #
 # Most thresholds in the source notebook are marked GUESS and need calibration. Enter the actual flight times and farm coordinates in Configuration before relying on this score.
-
 
 # ===== Notebook code cell 16 =====
 # Copied from weather/l6_vari_confidence.py, weather/krops_rules.py, weather/nasa_power_job.py, weather/solar.py on feat/weather-vari-confidence (6175bca); keep in sync.
@@ -2306,7 +2381,6 @@ def confidence_for_scan(scan, plot, normals_mm, *, weatherkit=None, nasa_fetch=f
 
 # ## Step 1 — Load the image and create the ExG vegetation mask
 
-
 # ===== Notebook code cell 24 =====
 image_path = Path(IMAGE_PATH)
 model_path = Path(MODEL_PATH)
@@ -2335,11 +2409,22 @@ print(f"Image size: {width:,} × {height:,} px; vegetation pixels: {int(np.count
 
 # ## Step 2 — Detect and filter palm trees
 
-
 # ===== Notebook code cell 26 =====
-print("2/7: Loading CoreML model and detecting trees on ExG-segmented image...")
+print("2/7: Loading CoreML model and running tiled inference on the ExG-segmented image...")
 model = ct.models.MLModel(str(model_path))
-normalized_boxes, scores = parse_coreml_predictions(model, segmented_rgb)
+normalized_boxes, scores, inference_tile_summary = parse_coreml_predictions_tiled(
+    model,
+    segmented_rgb,
+    tile_width=INFERENCE_TILE_WIDTH_PX,
+    tile_height=INFERENCE_TILE_HEIGHT_PX,
+    overlap_fraction=INFERENCE_TILE_OVERLAP_FRACTION,
+)
+print(
+    f"Ran inference on {inference_tile_summary['tile_count']} tile(s) of up to "
+    f"{INFERENCE_TILE_WIDTH_PX}×{INFERENCE_TILE_HEIGHT_PX} px; "
+    f"{inference_tile_summary['detections_before_global_nms']} detections before "
+    f"cross-tile NMS, {inference_tile_summary['detections_after_global_nms']} after."
+)
 raw_trees = []
 for box, score in zip(normalized_boxes, scores):
     bbox = normalized_box_to_pixels(box, width, height)
@@ -2422,7 +2507,6 @@ show_preview_table("Detection filtering summary", ["Measure", "Value"], [
 # ## Steps 3–4 — Calculate tree VARI, group zones, and calculate confidence
 #
 # Step 4 shows the confidence formula, every zone’s intermediate factors, and the tree-count-weighted field confidence. The same shared formula is used later when the final zone recommendations are built.
-
 
 # ===== Notebook code cell 28 =====
 # Score the current photo's flight when the real flight times and location are configured.
@@ -2616,7 +2700,6 @@ show_preview_table("Zone grouping checkpoint", ["Zone", "Trees", "Approx. row", 
 
 # ## Step 5 — Calculate zone VARI and apply the fertilizer boost
 
-
 # ===== Notebook code cell 31 =====
 print("5/7: Coloring ExG tree masks by zone and calculating zone statistics...")
 try:
@@ -2662,7 +2745,8 @@ for zone in zones:
         tree_records.append({
             "tree_id": tree["tree_id"],
             "confidence": tree["confidence"],
-            "bbox": tree["bbox_annotation"],
+            "bounding_box_pixels": tree["bbox_annotation"],
+            "bbox": tree["bbox_annotation"],  # Backward-compatible alias
             "vari": tree["vari"],
         })
 # Get ExG mask pixels inside this tree's detection area
@@ -2711,6 +2795,7 @@ for zone in zones:
         "zone_id": zone["zone_id"],
         "approx_row": zone["approx_row"],
         "tree_count": len(tree_records),
+        "tree_ids": [tree_record["tree_id"] for tree_record in tree_records],
         "bbox": pixel_bbox_record(zb, width, height),
         "vari": zone_stats,
         "trees": tree_records,
@@ -2735,7 +2820,6 @@ show_preview_table("Zone statistics and boost preview", ["Zone", "Trees", "Mean 
 # ## Step 6 — View per-tree VARI heatmaps
 #
 # Each tile shows the original RGB crop dimmed, with bold quartile colors over a exact ExG mask inside each tree bbox derived from ExG. The exact ExG-selected pixels inside each bounding box are colored, matching the zone overlay mask. All valid ExG-masked VARI pixels from the detected trees are pooled to find the 25th, 50th, and 75th percentile cutoffs. Those shared cutoffs divide values into four color bands (quartiles), so colors differ clearly while remaining comparable between trees. Black pixels are outside the ExG mask.
-
 
 # ===== Notebook code cell 33 =====
 # Build a four-color VARI heatmap for each detected tree, using shared pixel quartiles.
@@ -2837,7 +2921,6 @@ print(f"Montage: {Path(OUTPUT_TREE_VARI_HEATMAP_MONTAGE).resolve()}")
 #
 # This view places each detected tree's single quartile color back at its position in the full original image. It uses the same exact ExG mask inside each tree bbox and 50% color opacity as the per-tree crops.
 
-
 # ===== Notebook code cell 35 =====
 # Paint each tree's assigned VARI quartile onto its location in the complete field image.
 field_quartile_rgb = original_rgb.copy()
@@ -2871,7 +2954,6 @@ plt.close()
 print(f"Full-field tree quartile overlay saved to: {Path(OUTPUT_FIELD_TREE_VARI_QUARTILE).resolve()}")
 
 # ## Step 8 — Create zone annotations, white separators, and zone centers
-
 
 # ===== Notebook code cell 37 =====
 # Draw only the Zone ID text labels (no bounding boxes)
@@ -3033,7 +3115,6 @@ show_preview_table("Zone center points", ["Zone", "Center x (px)", "Center y (px
 
 # ## Step 9 — Save per-zone image crops
 
-
 # ===== Notebook code cell 39 =====
 zone_base_crops_dir = Path(OUTPUT_ZONE_BASE_CROPS_DIR)
 zone_exg_crops_dir = Path(OUTPUT_ZONE_EXG_CROPS_DIR)
@@ -3075,7 +3156,6 @@ if zone_json:
 # The next cell prints **Separate VARI Supplement Product-Mass Conversion (annual)**. Dolomite and Kieserite each default to a base of 1.0 kg/palm/year; a dose entered for that product replaces its default using dose per tree × applications per year. The **Base product** and **Base+supplement** columns show that base separately from any zone VARI boost. The two Mg products are alternatives; choose one rather than adding both rows together. The output prints each base-rate source. The same base and combined amounts are saved in `oil_palm_zone_fertilizer_product_mass.csv` and, in each zone record and the separate product bag estimate array in the JSON. Run the notebook from the beginning to refresh these outputs.
 #
 # A separate **Zone Fertilizer Bag Purchase Estimate** table reports per-zone bag equivalents based on the combined base + VARI supplement product quantity. If that combined zone total is unavailable, it falls back to supplement kg/palm/year × tree count + base product kg/zone/year. Bag sizes are configurable; the field total is rounded up after summing zones.
-
 
 # ===== Notebook code cell 41 =====
 # Save CSV and print summary table
@@ -3176,6 +3256,10 @@ result = {
         "zone_area_formula": "zone_area_ha = detected_tree_count × spacing_m² ÷ 10,000; explicit per-zone or uniform areas override this estimate",
         "vari_pixel_filter": "Only finite VARI pixels with non-zero denominator inside ExG mask are included",
         "model_path": str(model_path),
+        "inference_mode": "Overlapping image tiles; tile detections mapped to full-image pixel coordinates and deduplicated with global NMS",
+        "inference_tile_size_px": {"width": INFERENCE_TILE_WIDTH_PX, "height": INFERENCE_TILE_HEIGHT_PX},
+        "inference_tile_overlap_fraction": INFERENCE_TILE_OVERLAP_FRACTION,
+        "inference_tile_summary": inference_tile_summary,
         "confidence_threshold": CONF_THRESHOLD,
         "maximum_tree_dimension_multiplier": MAX_TREE_DIMENSION_MULTIPLIER,
         "maximum_tree_area_multiplier": MAX_TREE_AREA_MULTIPLIER,
@@ -3186,7 +3270,7 @@ result = {
         "row_tolerance_multiplier": ROW_TOLERANCE_MULTIPLIER,
         "detected_tree_count": len(trees),
         "zone_count": len(zone_json),
-        "coordinate_system": "Pixel coordinates use origin (0,0) at top-left; bbox x1,y1 inclusive-ish and x2,y2 exclusive crop boundary; center_point and center provide (x, y) coordinates for each zone based on the white-separator zoning image. normalized_xyxy and normalized_x/y values are divided by original image width/height.",
+        "coordinate_system": "Pixel coordinates use origin (0,0) at top-left; each zone's tree_ids and trees list represent membership assigned by the zoning algorithm; each tree bounding_box_pixels uses x1,y1 inclusive-ish and x2,y2 exclusive crop boundary, with width, height, and normalized_xyxy divided by original image width/height. White separator lines visualize the zone partition and do not independently determine tree membership.",
         "limitations": [
             "ExG is a heuristic vegetation mask and may include weeds or omit shaded palm leaves.",
             "Zone confidence is a heuristic from tree count and ExG leaf-pixel coverage; notebook parameters marked GUESS require calibration against field observations.",
@@ -3220,8 +3304,9 @@ show_preview_table("Files created in this step", ["Output", "Path"], [
 
 # ## Step 11 — Build and display the pipeline preview
 
-
 # ===== Notebook code cell 43 =====
+Image.MAX_IMAGE_PIXELS = 933120000 
+
 # Build and save the 3x3 visualization figure with per-tree heatmaps, VARI table, distribution, and boundaries
 fig, axes = plt.subplots(3, 3, figsize=(26, 22))
 axes[0][0].imshow(original_rgb)
@@ -3348,16 +3433,16 @@ print(f" 13. VARI distribution plot:   {Path(OUTPUT_VARI_DISTRIBUTION).resolve()
 print(f" 14. Per-tree VARI heatmaps:    {Path(OUTPUT_TREE_VARI_HEATMAP_DIR).resolve()} ({len(trees)} images)")
 print(f" 15. Tree heatmap montage:     {Path(OUTPUT_TREE_VARI_HEATMAP_MONTAGE).resolve()}")
 print(" 15. Zone Center Points (x, y) from white separator zoning:")
-display(Image.open(OUTPUT_PLAIN_ZONE_ANNOTATED))
-display(Image.open(OUTPUT_PLAIN_ZONE_WITH_SEPARATOR))
-display(Image.open(OUTPUT_WHITE_ZONE_NUMBERS))
-for z in zone_json:
-    cp = z["center_point"]
-    print(f"      Zone {z['zone_id']}: x = {cp['x']}, y = {cp['y']} (normalized: x = {cp['normalized_x']:.4f}, y = {cp['normalized_y']:.4f})")
-if SHOW_PLOTS:
-    plt.close()
-else:
-    plt.close(fig)
+# display(Image.open(OUTPUT_PLAIN_ZONE_ANNOTATED))
+# display(Image.open(OUTPUT_PLAIN_ZONE_WITH_SEPARATOR))
+# display(Image.open(OUTPUT_WHITE_ZONE_NUMBERS))
+# for z in zone_json:
+#     cp = z["center_point"]
+#     print(f"      Zone {z['zone_id']}: x = {cp['x']}, y = {cp['y']} (normalized: x = {cp['normalized_x']:.4f}, y = {cp['normalized_y']:.4f})")
+# if SHOW_PLOTS:
+#     plt.close()
+# else:
+#     plt.close(fig)
 
 # # Part 2 — Annual NPK/NPKMg comparison
 #
@@ -3365,10 +3450,9 @@ else:
 #
 # Edit the input values in the configuration cell, then run the remaining cells in this section from top to bottom. The final report is shown in a horizontally scrollable, aligned output block.
 
-
 # ## A. Configure the user fertilizer and reference values
 #
-# The notebook reads fertilizer composition, dose per tree, and frequency from the submission JSON. For every recognized fertilizer: annual product kg = dosePerTree × fertilizerHistory.freq × detected tree count; divide by farm areaHa for kg/ha/year. Bag equivalents are derived from dose and bag size; they are not user inputs. Configure fallback label/rate, comparison tolerance, baseline, and standalone product label guarantees here.
+# The notebook reads fertilizer composition, dose per tree, and frequency from the submission JSON. For every recognized fertilizer: annual product kg = dosePerTree × fertilizerHistory.freq × detected tree count; divide by farm areaHa for kg/ha/year. Bag equivalents are derived from dose and bag size; they are not user inputs. Baseline rates are per hectare; the notebook multiplies them by farm `areaHa` to report whole-farm NPKMg targets and supplement quantities. Per-hectare comparisons remain per hectare. Configure fallback label/rate, comparison tolerance, baseline, and standalone product label guarantees here.
 #
 # Standalone P/K options use **SP-36 (36% P₂O₅, 50 kg bag)** and **KCl/MOP (60% K₂O, 50 kg bag)**. Petrokimia Gresik documents the SP-36 label and 50 kg pack ([product specification](https://petrokimia-gresik.com/product/pupuk-sp-36)); PT PPI documents KCl/MOP at 60% K₂O ([product information](https://www.ptppi.co.id/product/detail/50)). Product labels are oxide-based, so the calculation converts the elemental P or K gap to product mass using the same oxide-to-element factors defined above. The bag sizes and label fractions are configurable in the code. KCl contains chloride, so verify it is suitable for the field and use the actual bag guarantee.
 #
@@ -3378,15 +3462,13 @@ else:
 #
 # The Commonize age multiplier is treated as a target. When an annual fertilizer budget is entered, the notebook can reduce each blend option’s multiplier as needed to keep the estimated whole-bag cost (NPK plus the selected zone Mg product and Urea) within the budget plus the configured margin. It never reduces the NPK blend below 1×, which is the amount calculated to meet the baseline; if that minimum exceeds the cap, the notebook reports the conflict. Set `ENABLE_NPK_AGE_BUDGET_CAP = False` to disable budget-based capping and use the full Commonize age multiplier. Set it to `True` to enable the cap. Configure `MAX_NPK_COST_OVER_BUDGET_PERCENT` to change the allowed margin.
 
-
 # ===== Notebook code cell 46 =====
 # Imports for this standalone comparison section (also works if this section is run by itself).
 import math
 import html as _npk_html
 from contextlib import redirect_stdout as _npk_redirect_stdout
 from io import StringIO as _NPKStringIO
-from IPython.display import HTML as _NPKHTML
-_npk_display = display
+from IPython.display import display as _npk_display, HTML as _NPKHTML
 from datetime import date as _npk_date
 
 # Fallback values are used if the submission contains no usable NPK dose.
@@ -3468,6 +3550,12 @@ BASELINE_ELEMENTAL_KG_HA_YEAR = {
     "K": 54.00,
     "Mg": 6.00,
 }
+# Farm-wide annual target: scale every per-hectare baseline by the submitted farm area.
+# Keep the kg/ha baseline above unchanged for per-hectare comparisons.
+BASELINE_ELEMENTAL_KG_FARM_YEAR = {
+    nutrient: float(rate) * float(USER_FARM_AREA_HA)
+    for nutrient, rate in BASELINE_ELEMENTAL_KG_HA_YEAR.items()
+}
 
 # Standalone Mg products, using the same label-basis assumptions as
 # oil_palm_zones_vari_fertilizer.py. Enter the guaranteed MgO fraction from
@@ -3519,7 +3607,6 @@ for oxide_data in OXIDE_TO_ELEMENT.values():
 # ## B. Parse labels and convert to elemental nutrients
 #
 # These helpers interpret the bag label and calculate elemental N, P, K, and Mg supplied per hectare per year.
-
 
 # ===== Notebook code cell 48 =====
 def parse_analysis(label):
@@ -3648,7 +3735,6 @@ def build_recorded_fertilizer_history_supply():
 #
 # For a positive Mg gap, this prints kieserite and dolomite as alternatives. Label MgO is converted to elemental Mg before calculating the product mass and bag count.
 
-
 # ===== Notebook code cell 50 =====
 def print_standalone_n_recommendation(elemental_year):
     """Show separate ZA/urea options for the elemental N shortfall."""
@@ -3661,7 +3747,7 @@ def print_standalone_n_recommendation(elemental_year):
     if n_gap <= 0:
         print("No standalone N is calculated from this baseline comparison.")
         return
-    headers = ["Product", "Label", "Needed kg/ha/year", "Bag kg", "Exact bags", "Buy full bags"]
+    headers = ["Product", "Label", "Needed kg/ha/year", "Needed kg/farm/year", "Bag kg", "Exact bags/farm", "Buy full bags/farm"]
     rows = []
     for name, config in STANDALONE_N_PRODUCTS.items():
         fraction = float(config["n_fraction"])
@@ -3669,17 +3755,19 @@ def print_standalone_n_recommendation(elemental_year):
         if not 0 < fraction <= 1 or bag_size <= 0:
             raise ValueError(f"Invalid N label fraction or bag size configured for {name}.")
         product_needed = n_gap / fraction
-        exact_bags = product_needed / bag_size
-        full_bags = math.ceil(exact_bags - 1e-12)
+        product_needed_farm = product_needed * float(USER_FARM_AREA_HA)
+        exact_bags_farm = product_needed_farm / bag_size
+        full_bags_farm = math.ceil(exact_bags_farm - 1e-12)
         rows.append([name, f"{fraction * 100:.{OUTPUT_DECIMALS}f}% N",
-                     npk_fmt(product_needed), npk_fmt(bag_size),
-                     npk_fmt(exact_bags), str(full_bags)])
+                     npk_fmt(product_needed), npk_fmt(product_needed_farm), npk_fmt(bag_size),
+                     npk_fmt(exact_bags_farm), str(full_bags_farm)])
     widths = [max(len(headers[i]), *(len(row[i]) for row in rows)) for i in range(len(headers))]
     print(" | ".join(headers[i].ljust(widths[i]) for i in range(len(headers))))
     print("-+-".join("-" * width for width in widths))
     for row in rows:
         print(" | ".join(value.ljust(widths[i]) for i, value in enumerate(row)))
-    print("Calculation: product kg = N gap (kg elemental N) ÷ label fraction (kg N/kg product).")
+    print("Farm total = per-hectare product amount × farm areaHa; full bags are rounded up after scaling to the whole farm.")
+    print("Calculation: product kg/ha = N gap (kg elemental N/ha) ÷ label fraction (kg N/kg product).")
     print("ZA and urea are alternatives; do not add both rows together.")
 
 
@@ -3697,7 +3785,7 @@ def print_standalone_oxide_recommendation(elemental_year, nutrient, oxide_basis,
         return
 
     headers = ["Product", "Label guarantee", f"Elemental {nutrient}/kg product",
-               "Needed kg/ha/year", "Bag kg", "Exact bags", "Buy full bags"]
+               "Needed kg/ha/year", "Needed kg/farm/year", "Bag kg", "Exact bags/farm", "Buy full bags/farm"]
     rows, details = [], []
     for name, config in products.items():
         oxide_fraction = float(config["oxide_fraction"])
@@ -3706,14 +3794,15 @@ def print_standalone_oxide_recommendation(elemental_year, nutrient, oxide_basis,
             raise ValueError(f"Invalid oxide label fraction or bag size configured for {name}.")
         elemental_per_kg = oxide_fraction * oxide_factor
         product_needed = gap / elemental_per_kg
-        exact_bags = product_needed / bag_size
-        full_bags = math.ceil(exact_bags - 1e-12)
+        product_needed_farm = product_needed * float(USER_FARM_AREA_HA)
+        exact_bags_farm = product_needed_farm / bag_size
+        full_bags_farm = math.ceil(exact_bags_farm - 1e-12)
         rows.append([name, f"{oxide_fraction * 100:.{OUTPUT_DECIMALS}f}% {oxide_basis}",
                      f"{npk_fmt(elemental_per_kg)} kg {nutrient}/kg",
-                     npk_fmt(product_needed), npk_fmt(bag_size),
-                     npk_fmt(exact_bags), str(full_bags)])
+                     npk_fmt(product_needed), npk_fmt(product_needed_farm), npk_fmt(bag_size),
+                     npk_fmt(exact_bags_farm), str(full_bags_farm)])
         details.append((name, oxide_fraction, bag_size, elemental_per_kg,
-                        product_needed, exact_bags, full_bags))
+                        product_needed, exact_bags_farm, full_bags_farm))
 
     widths = [max(len(headers[i]), *(len(row[i]) for row in rows)) for i in range(len(headers))]
     print(" | ".join(headers[i].ljust(widths[i]) for i in range(len(headers))))
@@ -3738,9 +3827,12 @@ def print_standalone_oxide_recommendation(elemental_year, nutrient, oxide_basis,
               f"= {npk_fmt(nutrient_per_bag)} kg elemental {nutrient} per bag.")
         print(f"    Elemental {nutrient} per kg product: {npk_fmt(oxide_fraction)} × {oxide_factor:.9f} "
               f"= {npk_fmt(elemental_per_kg)} kg {nutrient}/kg product.")
-        print(f"    Product needed: {npk_fmt(gap)} kg {nutrient} ÷ {npk_fmt(elemental_per_kg)} "
-              f"kg {nutrient}/kg product = {npk_fmt(product_needed)} kg product/ha/year.")
-        print(f"    Bags: {npk_fmt(product_needed)} kg ÷ {npk_fmt(bag_size)} kg/bag "
+        product_needed_farm = product_needed * float(USER_FARM_AREA_HA)
+        print(f"    Product needed per ha: {npk_fmt(gap)} kg {nutrient}/ha ÷ {npk_fmt(elemental_per_kg)} "
+              f"kg {nutrient}/kg product = {npk_fmt(product_needed)} kg/ha/year.")
+        print(f"    Product needed for farm: {npk_fmt(product_needed)} kg/ha/year × "
+              f"{npk_fmt(USER_FARM_AREA_HA)} ha = {npk_fmt(product_needed_farm)} kg/farm/year.")
+        print(f"    Farm bags: {npk_fmt(product_needed_farm)} kg ÷ {npk_fmt(bag_size)} kg/bag "
               f"= {npk_fmt(exact_bags)}; buy {full_bags} full bag(s).")
 
 
@@ -3766,7 +3858,7 @@ def print_standalone_mg_recommendation(elemental_year):
         return
 
     headers = ["Product", "Label guarantee", "Elemental Mg/kg product", "Needed kg/ha/year",
-               "Bag kg", "Exact bags", "Buy full bags"]
+               "Needed kg/farm/year", "Bag kg", "Exact bags/farm", "Buy full bags/farm"]
     rows = []
     calculations = []
     mg_factor = OXIDE_TO_ELEMENT["MgO"]["factor"]
@@ -3777,19 +3869,21 @@ def print_standalone_mg_recommendation(elemental_year):
             raise ValueError(f"Invalid Mg label fraction or bag size configured for {name}.")
         elemental_mg_per_kg_product = mgo_fraction * mg_factor
         product_needed = mg_gap / elemental_mg_per_kg_product if elemental_mg_per_kg_product else math.inf
-        exact_bags = product_needed / bag_size
-        full_bags = math.ceil(exact_bags - 1e-12)
+        product_needed_farm = product_needed * float(USER_FARM_AREA_HA)
+        exact_bags_farm = product_needed_farm / bag_size
+        full_bags_farm = math.ceil(exact_bags_farm - 1e-12)
         rows.append([
             name,
             f"{mgo_fraction * 100:.{OUTPUT_DECIMALS}f}% MgO",
             f"{npk_fmt(elemental_mg_per_kg_product)} kg Mg/kg",
             npk_fmt(product_needed),
+            npk_fmt(product_needed_farm),
             npk_fmt(bag_size),
-            npk_fmt(exact_bags),
-            str(full_bags),
+            npk_fmt(exact_bags_farm),
+            str(full_bags_farm),
         ])
         calculations.append((name, mgo_fraction, bag_size, elemental_mg_per_kg_product,
-                             product_needed, exact_bags, full_bags))
+                             product_needed, exact_bags_farm, full_bags_farm))
 
     widths = [max(len(headers[i]), *(len(row[i]) for row in rows)) for i in range(len(headers))]
     print(" | ".join(header.ljust(widths[i]) for i, header in enumerate(headers)))
@@ -3808,15 +3902,17 @@ def print_standalone_mg_recommendation(elemental_year):
               f"= {npk_fmt(mgo_fraction)} kg MgO/kg product.")
         print(f"    Elemental Mg per kg product = {npk_fmt(mgo_fraction)} × {mg_factor:.9f} "
               f"= {npk_fmt(elemental_per_kg)} kg Mg/kg product.")
-        print(f"    Product needed = {npk_fmt(mg_gap)} kg Mg ÷ {npk_fmt(elemental_per_kg)} kg Mg/kg product "
-              f"= {npk_fmt(product_needed)} kg product/ha/year.")
-        print(f"    Exact bags = {npk_fmt(product_needed)} kg ÷ {npk_fmt(bag_size)} kg/bag "
+        product_needed_farm = product_needed * float(USER_FARM_AREA_HA)
+        print(f"    Product needed per ha = {npk_fmt(mg_gap)} kg Mg/ha ÷ {npk_fmt(elemental_per_kg)} kg Mg/kg product "
+              f"= {npk_fmt(product_needed)} kg/ha/year.")
+        print(f"    Product needed for farm = {npk_fmt(product_needed)} kg/ha/year × "
+              f"{npk_fmt(USER_FARM_AREA_HA)} ha = {npk_fmt(product_needed_farm)} kg/farm/year.")
+        print(f"    Exact farm bags = {npk_fmt(product_needed_farm)} kg ÷ {npk_fmt(bag_size)} kg/bag "
               f"= {npk_fmt(exact_bags)}; buy {full_bags} full bag(s).")
 
 # ## D. Build the comparison report
 #
 # The report shows per-bag nutrient content, annual supply versus baseline, the calculation steps, standalone N and Mg options, and a field-wide blend decision aid. The decision aid is separate from the zone-specific boost calculations above.
-
 
 # ===== Notebook code cell 52 =====
 
@@ -4114,12 +4210,21 @@ def build_field_npk_json_record(label_percent):
         difference = supplied - float(target)
         gap = max(0.0, float(target) - supplied)
         gaps[nutrient] = gap
+        farm_area_ha = float(USER_FARM_AREA_HA)
+        baseline_farm = float(target) * farm_area_ha
+        supplied_farm = supplied * farm_area_ha
+        difference_farm = difference * farm_area_ha
+        gap_farm = gap * farm_area_ha
         comparisons[nutrient] = {
             "baseline_elemental_kg_ha_year": float(target),
             "recorded_fertilizer_supply_elemental_kg_ha_year": supplied,
             "npk_blend_only_elemental_kg_ha_year": float(npk_elemental_year[nutrient]),
             "difference_elemental_kg_ha_year": difference,
             "shortfall_elemental_kg_ha_year": gap,
+            "baseline_elemental_kg_farm_year": baseline_farm,
+            "recorded_fertilizer_supply_elemental_kg_farm_year": supplied_farm,
+            "difference_elemental_kg_farm_year": difference_farm,
+            "shortfall_elemental_kg_farm_year": gap_farm,
             "shortfall_percent_of_baseline": gap / float(target) * 100.0 if target else 0.0,
             "surplus_percent_of_baseline": max(0.0, difference) / float(target) * 100.0 if target else 0.0,
         }
@@ -4156,9 +4261,13 @@ def build_field_npk_json_record(label_percent):
                 "elemental_nutrient_fraction_kg_per_kg_product": elemental_fraction,
                 "elemental_gap_kg_ha_year": gap,
                 "product_needed_kg_ha_year": product_needed,
+                "elemental_gap_kg_farm_year": gap * float(USER_FARM_AREA_HA),
+                "product_needed_kg_farm_year": product_needed * float(USER_FARM_AREA_HA),
                 "bag_size_kg": bag_size,
                 "exact_bags_ha_year": exact_bags,
                 "full_bags_to_buy_ha_year": math.ceil(exact_bags - 1e-12) if exact_bags > 0 else 0,
+                "exact_bags_farm_year": exact_bags * float(USER_FARM_AREA_HA),
+                "full_bags_to_buy_farm_year": math.ceil(exact_bags * float(USER_FARM_AREA_HA) - 1e-12) if exact_bags > 0 else 0,
             })
         standalone[nutrient] = {
             "elemental_shortfall_kg_ha_year": gap,
@@ -4329,6 +4438,11 @@ def build_field_npk_json_record(label_percent):
         "recorded_fertilizer_history_supply": history_supply,
         "age_based_npk_product_target": age_based_npk_target,
         "baseline_elemental_kg_ha_year": {key: float(value) for key, value in BASELINE_ELEMENTAL_KG_HA_YEAR.items()},
+        "baseline_elemental_kg_farm_year": {
+            key: float(value) * float(USER_FARM_AREA_HA)
+            for key, value in BASELINE_ELEMENTAL_KG_HA_YEAR.items()
+        },
+        "farm_area_ha_used_for_baseline_scaling": float(USER_FARM_AREA_HA),
         "nutrient_comparison": comparisons,
         "standalone_top_up_options": standalone,
         "blend_purchase_price_estimates": blend_price_estimates,
@@ -4344,6 +4458,8 @@ def build_field_npk_json_record(label_percent):
             "bags_per_ha_year": "annual product kg/ha/year ÷ bagKg; derived for reference, not entered by the farmer",
             "elemental_supply": "annual product kg/ha/year × (label guarantee % ÷ 100) × oxide-to-element factor; N factor=1",
             "elemental_gap": "max(0, baseline elemental kg/ha/year − total recognized recorded fertilizer supply kg/ha/year)",
+            "farm_wide_baseline": "baseline elemental kg/ha/year × submitted farm areaHa = baseline elemental kg/farm/year",
+            "farm_wide_shortfall": "max(0, farm-wide baseline kg/year − farm-wide recorded supply kg/year); farm-wide standalone product and bag quantities = per-ha requirement × farm areaHa, rounding full bags after scaling",
             "product_needed": "elemental gap ÷ (label fraction × oxide-to-element factor)",
             "bags_to_buy": "ceil(product needed kg ÷ bag size kg)",
         },
@@ -4498,6 +4614,26 @@ def print_npk_comparison(label_percent):
     print("-+-".join("-" * width for width in widths))
     for row in rows:
         print(" | ".join(value.ljust(widths[index]) for index, value in enumerate(row)))
+
+    # Farm-wide values scale the per-hectare target and per-hectare supply by areaHa.
+    farm_rows = []
+    for nutrient, baseline_rate in BASELINE_ELEMENTAL_KG_HA_YEAR.items():
+        baseline_farm = float(baseline_rate) * float(USER_FARM_AREA_HA)
+        supplied_farm = float(elemental_year[nutrient]) * float(USER_FARM_AREA_HA)
+        difference_farm = supplied_farm - baseline_farm
+        status = "MEETS / ABOVE" if difference_farm >= 0 else f"BELOW by {npk_fmt(-difference_farm)} kg"
+        farm_rows.append([nutrient, npk_fmt(baseline_farm), npk_fmt(supplied_farm),
+                          npk_fmt(difference_farm), status])
+    farm_headers = ["Nutrient", "Baseline kg/farm/year", "User supplies kg/farm/year",
+                    "Difference kg/farm/year", "Comparison"]
+    farm_widths = [max(len(farm_headers[i]), *(len(row[i]) for row in farm_rows))
+                   for i in range(len(farm_headers))]
+    print(f"\nFarm-wide annual target ({npk_fmt(USER_FARM_AREA_HA)} ha; baseline rate × area):")
+    print(" | ".join(h.ljust(farm_widths[i]) for i, h in enumerate(farm_headers)))
+    print("-+-".join("-" * w for w in farm_widths))
+    for row in farm_rows:
+        print(" | ".join(value.ljust(farm_widths[i]) for i, value in enumerate(row)))
+    print("Formula: farm baseline = per-hectare baseline × submitted areaHa; farm supply = per-hectare supply × areaHa.")
 
     print("\nCalculation details (elemental nutrient supply from recorded products):")
     for nutrient in BASELINE_ELEMENTAL_KG_HA_YEAR:
@@ -4828,7 +4964,6 @@ def print_npk_comparison(label_percent):
 #
 # This reads `user_submission_request.json` from the notebook kernel’s current working directory, outside the generated `outputs/` folder. Farm area, profile fields, fertilizer history, harvest history, and review month flow into `ui_data`; NPK label, dose per tree, fertilizer frequency, detected tree count, and farm area determine current nutrient supply. Recognized standalone products in the fertilizer history contribute their nutrients too; bag equivalents are derived from the configured bag size. The image-derived zone analysis remains based on the image/model. This section appends calculated field-wide NPK and zone boost results to the zone JSON, including the whole-farm closest-to-budget ranking for each age-adjusted blend option. Run from the beginning.
 
-
 # ===== Notebook code cell 54 =====
 analysis = parse_analysis(USER_FERTILIZER_ANALYSIS)
 report_buffer = _NPKStringIO()
@@ -5089,7 +5224,6 @@ print(f"Fertilizer history + VARI supplement summary saved to: {Path(OUTPUT_FERT
 #
 # At **10 bags × 50 kg/ha/year**, the blend provides approximately N 65.00, P 13.09, K 112.07, and Mg 12.06 kg elemental/ha/year. Against the current baseline (N 90, P 10, K 111, Mg 13), N is 27.8% below and Mg is 7.2% below, while P and K meet or exceed baseline. Since the largest N/P/K gap is within the configured 30% routing threshold, the example evaluates standalone N, P, K, and Mg options instead of recommending another NPK bag. Here, only N and Mg have shortfalls; P and K tables show no standalone top-up is needed. The P/K calculations will recommend SP-36 or KCl/MOP whenever their elemental gaps are positive. This is a comparison example, not an application-rate recommendation; check the product label and field-specific advice.
 
-
 # ===== Notebook code cell 56 =====
 # Real commercial NPKMg formulation and 50 kg bag, linked in the note above.
 EXAMPLE_PRODUCT = "PUSRI NPK 13-6-27-4+0.65B"
@@ -5152,11 +5286,9 @@ print("If Part 1 recommends a positive zone boost, use its zone-level amounts se
 #
 # This recap uses the submitted farm/profile values and fertilizer history, the zone product totals already calculated above, and the annual age-adjusted NPK blend options. Each blend age multiplier is reduced when needed to keep whole-bag annual cost within the submitted budget plus the configurable margin; the baseline blend stays at a minimum of 1×. Budget fit compares estimated whole-bag annual purchases for each NPK option plus the selected zone Mg product and Urea, when their prices are configured. This is a cost comparison; nutrient fit and field-specific advice still matter. The budget is treated as an annual whole-farm budget in Rupiah.
 
-
 # ===== Notebook code cell 58 =====
 # Compact recap of the input, zone-level product quantities, and NPK budget fit.
-from IPython.display import HTML as _OverviewHTML
-_overview_display = display
+from IPython.display import display as _overview_display, HTML as _OverviewHTML
 import html as _overview_html
 import math as _overview_math
 import re as _overview_re
@@ -5336,3 +5468,94 @@ else:
     print(f"Closest by estimated cost: {_overview_closest['option'].get('blendOption')} — "
           f"{_overview_rp(_overview_closest['combined_cost'])}, a difference of "
           f"{_overview_rp(abs(_overview_closest['delta']))} from budget. Nutrient matching still matters.")
+
+# ## Assessment recap — VARI quartiles and farmer nutrients
+#
+# This recap counts detected trees assigned to each of the four tree-mean VARI quartiles, then compares recognized fertilizer-history N, P, K, and Mg supply with the configured baseline. Nutrient totals are shown as annual kilograms for the whole farm; per-hectare values are included for context. Baseline farm kilograms equal the configured kg/ha/year baseline multiplied by the submitted farm area.
+
+# ===== Notebook code cell 60 =====
+# Summarize detected trees in the same four tree-mean VARI quartiles used by the heatmap.
+_assessment_quartile_counts = [0, 0, 0, 0]
+_assessment_unclassified_trees = 0
+for _tree_data in tree_heatmap_data:
+    _quartile_index = _tree_data[6]
+    if _quartile_index is None:
+        _assessment_unclassified_trees += 1
+    else:
+        _assessment_quartile_counts[int(_quartile_index)] += 1
+_assessment_valid_tree_count = sum(_assessment_quartile_counts)
+_assessment_total_tree_count = len(tree_heatmap_data)
+_assessment_quartile_specs = [
+    ("Q1 — lowest", f"VARI ≤ {tree_vari_q25:.4f}"),
+    ("Q2", f"{tree_vari_q25:.4f} < VARI ≤ {tree_vari_q50:.4f}"),
+    ("Q3", f"{tree_vari_q50:.4f} < VARI ≤ {tree_vari_q75:.4f}"),
+    ("Q4 — highest", f"VARI > {tree_vari_q75:.4f}"),
+]
+_assessment_quartile_rows = [
+    [label, value_range, str(_assessment_quartile_counts[index]),
+     f"{(_assessment_quartile_counts[index] / _assessment_valid_tree_count * 100.0):.1f}%" if _assessment_valid_tree_count else "N/A"]
+    for index, (label, value_range) in enumerate(_assessment_quartile_specs)
+]
+_assessment_quartile_rows.append(["Unclassified", "No valid tree mean VARI", str(_assessment_unclassified_trees), "Excluded"])
+_assessment_quartile_rows.append(["Total detected", "All detected tree boxes", str(_assessment_total_tree_count), "100%"])
+
+def _assessment_show_table(title, headers, rows):
+    _assessment_html = [f"<h3>{html.escape(title)}</h3><table style='border-collapse:collapse;width:100%;margin:8px 0 20px'>"]
+    _assessment_html.append("<thead><tr>" + "".join(
+        f"<th style='text-align:left;padding:7px;border-bottom:2px solid #999;background:#eef2f5'>{html.escape(str(_h))}</th>"
+        for _h in headers
+    ) + "</tr></thead><tbody>")
+    for _row in rows:
+        _assessment_html.append("<tr>" + "".join(
+            f"<td style='padding:7px;border-bottom:1px solid #ddd;vertical-align:top'>{html.escape(str(_v))}</td>"
+            for _v in _row
+        ) + "</tr>")
+    _assessment_html.append("</tbody></table>")
+    display(HTML("".join(_assessment_html)))
+
+print(f"Detected trees: {_assessment_total_tree_count}; assigned to quartiles: {_assessment_valid_tree_count}; unclassified: {_assessment_unclassified_trees}.")
+print("Quartile cutoffs are based on the detected trees' mean VARI values. Values exactly on a cutoff are included in the lower quartile.")
+_assessment_show_table(
+    "Detected-tree counts by VARI quartile",
+    ["Quartile", "Tree-mean VARI range", "Trees", "Share of classified trees"],
+    _assessment_quartile_rows,
+)
+
+# Compare the recognized fertilizer-history nutrients with the baseline in annual farm kg.
+_assessment_history = build_recorded_fertilizer_history_supply()
+_assessment_area_ha = float(USER_FARM_AREA_HA)
+_assessment_nutrient_rows = []
+if _assessment_history is None:
+    for _nutrient in ("N", "P", "K", "Mg"):
+        _assessment_nutrient_rows.append([_nutrient, "No history", "No history", "No history", "No history"])
+else:
+    _assessment_supply_per_ha = _assessment_history["elemental_supply_kg_ha_year"]
+    for _nutrient in ("N", "P", "K", "Mg"):
+        _farmer_kg_ha = float(_assessment_supply_per_ha.get(_nutrient, 0.0))
+        _baseline_kg_ha = float(BASELINE_ELEMENTAL_KG_HA_YEAR[_nutrient])
+        _farmer_farm_kg = _farmer_kg_ha * _assessment_area_ha
+        _baseline_farm_kg = _baseline_kg_ha * _assessment_area_ha
+        _difference_farm_kg = _farmer_farm_kg - _baseline_farm_kg
+        _status = "Meets baseline" if abs(_difference_farm_kg) < 1e-9 else (
+            f"{abs(_difference_farm_kg):,.3f} kg below" if _difference_farm_kg < 0
+            else f"{_difference_farm_kg:,.3f} kg above"
+        )
+        _assessment_nutrient_rows.append([
+            _nutrient,
+            f"{_farmer_farm_kg:,.3f}",
+            f"{_baseline_farm_kg:,.3f}",
+            f"{_difference_farm_kg:+,.3f}",
+            _status,
+        ])
+    if _assessment_history.get("ignored_products"):
+        _ignored_names = ", ".join(item.get("product", "Unknown") for item in _assessment_history["ignored_products"])
+        print(f"History products omitted from nutrient totals because their dose/label is missing or unsupported: {_ignored_names}.")
+
+_assessment_show_table(
+    f"Annual farmer-history nutrients compared with baseline ({_assessment_area_ha:.3f} ha)",
+    ["Nutrient", "From recognized history (kg/farm/year)", "Baseline (kg/farm/year)", "Difference (kg/farm/year)", "Assessment"],
+    _assessment_nutrient_rows,
+)
+print("Farmer-history supply uses dosePerTree × fertilizerHistory.freq × detected tree count, then the configured nutrient-label fractions and oxide-to-element conversions.")
+print("Farm baseline = configured baseline (kg/ha/year) × farm areaHa. These are elemental N, P, K, and Mg kilograms per year.")
+
