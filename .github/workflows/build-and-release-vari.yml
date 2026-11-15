@@ -85,7 +85,7 @@ jobs:
             --no-daily \
             --out .build/timing_in_progress.json
           .build/dist/VariPython -m unittest discover -s integration/v2/fertilization_timing
-          .build/dist/VariPython -m unittest integration/tests/test_timing_cli.py
+          .build/dist/VariPython -m unittest integration/tests/test_timing_cli.py integration/tests/test_main_cli.py
           rm -f .build/timing_plain.json .build/timing_in_progress.json
 
       - name: Compress & Checksum Archive
