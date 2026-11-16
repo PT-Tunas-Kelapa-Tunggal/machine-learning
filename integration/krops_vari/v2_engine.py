@@ -149,7 +149,20 @@ def run_v2_scan(
     # Submission object comes directly from the function argument.
     UI_SUBMISSION_DATA = _USER_SUBMISSION_DATA
     UI_FARM_INPUT = UI_SUBMISSION_DATA.get("farm", {})
-    FERTILIZER_BUDGET_RP = UI_SUBMISSION_DATA.get("fertilizerBudgetRp")  # Optional annual fertilizer budget in Indonesian Rupiah.
+    FERTILIZER_BUDGET_RP_PER_HA = UI_SUBMISSION_DATA.get("fertilizerBudgetRp")  # User-entered annual budget per hectare.
+    try:
+        FERTILIZER_BUDGET_AREA_HA = float(UI_FARM_INPUT.get("areaHa")) if UI_FARM_INPUT.get("areaHa") is not None else 1.0
+        _budget_per_ha_value = float(FERTILIZER_BUDGET_RP_PER_HA) if FERTILIZER_BUDGET_RP_PER_HA is not None else None
+        FERTILIZER_BUDGET_RP = (
+            _budget_per_ha_value * FERTILIZER_BUDGET_AREA_HA
+            if _budget_per_ha_value is not None
+            and math.isfinite(_budget_per_ha_value) and _budget_per_ha_value >= 0
+            and math.isfinite(FERTILIZER_BUDGET_AREA_HA) and FERTILIZER_BUDGET_AREA_HA > 0
+            else None
+        )
+    except (TypeError, ValueError):
+        FERTILIZER_BUDGET_AREA_HA = None
+        FERTILIZER_BUDGET_RP = None
 
     # Screen-entered values are loaded from the submission JSON; image/map fields remain optional.
     PULSE_CHECK_FARM_PROFILE = {
@@ -164,7 +177,9 @@ def run_v2_scan(
         "soil_type": UI_FARM_INPUT.get("soil"),
         "farm_boundary_geojson": UI_FARM_INPUT.get("farmBoundaryGeojson"),
         "review_month": UI_SUBMISSION_DATA.get("month"),
-        "fertilizer_budget_rp": FERTILIZER_BUDGET_RP,
+        "fertilizer_budget_rp_per_ha": FERTILIZER_BUDGET_RP_PER_HA,
+        "fertilizer_budget_area_ha": FERTILIZER_BUDGET_AREA_HA,
+        "fertilizer_budget_rp_farm_year": FERTILIZER_BUDGET_RP,
     }
     PULSE_CHECK_ZONE_BOUNDARIES_GEOJSON = {}  # Optional {"Z1": GeoJSON geometry, ...}; image bboxes are not map polygons.
     PULSE_CHECK_NUTRIENT_MEASUREMENTS = None  # Optional measured soil/leaf results; not part of the current screens.
@@ -3942,7 +3957,9 @@ def run_v2_scan(
             "configured_multiplier": configured_multiplier,
             "applied_multiplier": configured_multiplier,
             "budget_cap_enabled": bool(ENABLE_NPK_AGE_BUDGET_CAP),
-            "budget_rp": UI_SUBMISSION_DATA.get("fertilizerBudgetRp"),
+            "budget_rp": FERTILIZER_BUDGET_RP,
+            "budget_rp_per_ha": FERTILIZER_BUDGET_RP_PER_HA,
+            "budget_area_ha": FERTILIZER_BUDGET_AREA_HA,
             "maximum_over_budget_percent": float(MAX_NPK_COST_OVER_BUDGET_PERCENT),
             "allowed_spend_rp": None,
             "fixed_zone_boost_cost_rp": None,
@@ -3954,7 +3971,7 @@ def run_v2_scan(
         if not ENABLE_NPK_AGE_BUDGET_CAP:
             steps.append("Budget cap is disabled; keep the configured Commonize multiplier.")
             return result
-        budget = UI_SUBMISSION_DATA.get("fertilizerBudgetRp")
+        budget = FERTILIZER_BUDGET_RP
         if budget is None:
             steps.append("fertilizerBudgetRp is empty; no budget cap is applied, so keep the configured Commonize multiplier.")
             return result
@@ -3968,7 +3985,13 @@ def run_v2_scan(
             result["status"] = "invalid budget input"
             steps.append("Budget must be a finite nonnegative Rupiah amount; no budget cap is applied.")
             return result
-        result["budget_rp"] = budget
+        result["budget_rp"] = budget  # Whole-farm annual budget used for the cap.
+        result["budget_rp_per_ha"] = FERTILIZER_BUDGET_RP_PER_HA
+        result["budget_area_ha"] = FERTILIZER_BUDGET_AREA_HA
+        steps.append(
+            f"Farm annual budget = Rp{float(FERTILIZER_BUDGET_RP_PER_HA):,.0f}/ha × "
+            f"{float(FERTILIZER_BUDGET_AREA_HA):,.3f} ha = Rp{budget:,.0f}/farm/year."
+        )
         margin = float(MAX_NPK_COST_OVER_BUDGET_PERCENT)
         margin_fraction = margin / 100.0
         budget_factor = 1.0 + margin_fraction
@@ -4325,7 +4348,7 @@ def run_v2_scan(
             })
 
         # Reproduce the final overview's closest-to-budget comparison in the JSON.
-        _budget_value = UI_SUBMISSION_DATA.get("fertilizerBudgetRp")
+        _budget_value = FERTILIZER_BUDGET_RP
         try:
             _budget_value = float(_budget_value) if _budget_value is not None else None
             if _budget_value is not None and (not math.isfinite(_budget_value) or _budget_value < 0):
@@ -4389,6 +4412,9 @@ def run_v2_scan(
         )
         _budget_comparison = {
             "annual_budget_rp": _budget_value,
+            "annual_budget_rp_per_ha": FERTILIZER_BUDGET_RP_PER_HA,
+            "budget_area_ha": FERTILIZER_BUDGET_AREA_HA,
+            "budget_formula": "fertilizerBudgetRp per hectare × farm.areaHa",
             "budget_cap_enabled": bool(ENABLE_NPK_AGE_BUDGET_CAP),
             "comparison_basis": "whole-farm annual whole-bag NPK cost plus the selected zone Mg and Urea whole-bag costs; closest means the smallest absolute difference from the entered budget",
             "selected_zone_mg_urea_whole_bag_cost_farm_year_rp": _zone_cost_for_ranking,
@@ -4828,7 +4854,10 @@ def run_v2_scan(
                 _affordable_bags = _budget_info.get("maximum_affordable_npk_full_bags")
                 budget_multiplier_rows.append([
                     candidate_name,
-                    "N/A" if _budget_input is None else f"Rp{_budget_input:,.0f}",
+                    "N/A" if _budget_input is None else (
+                        f"Rp{float(FERTILIZER_BUDGET_RP_PER_HA):,.0f}/ha × "
+                        f"{float(FERTILIZER_BUDGET_AREA_HA):,.3f} ha = Rp{_budget_input:,.0f}"
+                    ),
                     "N/A" if _allowed_input is None else f"Rp{_allowed_input:,.0f}",
                     f"{_baseline_farm_bags:.3f}",
                     f"{_candidate_configured_multiplier:.2f}×",
@@ -4915,7 +4944,7 @@ def run_v2_scan(
         for row in age_adjusted_blend_rows:
             print(" | ".join(value.ljust(age_widths[i]) for i, value in enumerate(row)))
         print("\nBaseline, age multiplier, and budget cap comparison:")
-        budget_headers = ["Blend", "Budget input", "Allowed incl. margin", "Baseline exact bags/farm/year",
+        budget_headers = ["Blend", "Budget input (Rp/ha × ha = farm)", "Allowed incl. margin", "Baseline exact bags/farm/year",
                           "Age target", "Budget cap", "Affordable NPK bags", "Applied multiplier",
                           "Adjusted exact bags/farm/year", "Combined cost", "Status / explanation"]
         budget_widths = [max(len(budget_headers[i]), *(len(row[i]) for row in budget_multiplier_rows))
@@ -4935,11 +4964,12 @@ def run_v2_scan(
         for row in age_process_rows:
             print(" | ".join(value.ljust(process_widths[i]) for i, value in enumerate(row)))
         print("\nRaw budget-cap formula (calculated separately for each blend):")
-        print("  B = user-entered annual fertilizer budget (Rp)")
+        print("  B_ha = user-entered annual fertilizer budget per hectare (Rp/ha)")
+        print("  A_ha = farm.areaHa; whole-farm annual budget B = B_ha × A_ha")
         print("  m = allowed over-budget margin (%)")
-        print("  Margin factor = 1 + (m/100); 1 means the original 100% budget, and m/100 is the extra margin fraction.")
-        print("    Example: m=15% → 1 + 15/100 = 1.15, allowing the budget plus 15%.")
-        print("  A = B × [1 + (m/100)]                       [maximum allowed spend, Rp]")
+        print("  Margin factor = 1 + (m/100); 1 means the original whole-farm budget, and m/100 is the extra margin fraction.")
+        print("    Example: Rp10,000,000/ha × 2 ha = Rp20,000,000; m=15% gives Rp23,000,000 allowed spend.")
+        print("  A = (B_ha × A_ha) × [1 + (m/100)]            [maximum whole-farm spend, Rp]")
         print("  Z = selected zone Mg + Urea whole-bag cost (Rp)")
         print("  R = A − Z                                   [budget left for NPK, Rp]")
         print("  P = this blend's configured price per bag (Rp/bag)")
@@ -4952,7 +4982,7 @@ def run_v2_scan(
         print("  Adjusted exact bags = Q × M_applied; whole bags to buy = ceil(adjusted exact bags).")
         print("  Estimated combined cost = whole NPK bags × P + Z.")
         print("\nIn plain words: baseline sets the nutrient amount, age sets the desired scale-up, and the budget limits the scale-up after zone-product costs are reserved.")
-        if UI_SUBMISSION_DATA.get("fertilizerBudgetRp") is None:
+        if FERTILIZER_BUDGET_RP is None:
             print("  No budget value is entered yet, so this run retains each Commonize multiplier without budget capping.")
 
         print("\nImportant: the table compares fertilizer label composition with the supplied baseline. "
@@ -5330,7 +5360,9 @@ def run_v2_scan(
         _overview_flatten("Fertilizer history", f"Product {_index}", _fert)
     for _key, _value in (UI_SUBMISSION_DATA.get("harvest") or {}).items():
         _overview_flatten("Harvest", _overview_label(_key), _value)
-    _overview_flatten("Budget", "Annual fertilizer budget (Rp)", UI_SUBMISSION_DATA.get("fertilizerBudgetRp"))
+    _overview_flatten("Budget", "User-entered annual budget (Rp/ha)", FERTILIZER_BUDGET_RP_PER_HA)
+    _overview_flatten("Budget", "Farm area used for budget scaling (ha)", FERTILIZER_BUDGET_AREA_HA)
+    _overview_flatten("Budget", "Calculated whole-farm annual budget (Rp)", FERTILIZER_BUDGET_RP)
     _overview_table("1. User-submitted farm and fertilizer data", ["Category", "Field", "Value"], _overview_input_rows)
 
     # 2) Display the annual base + VARI product quantity per zone for Dolomite and Urea.
@@ -5395,7 +5427,8 @@ def run_v2_scan(
     _overview_zone_topup_cost = _overview_zone_topup_cost_rp if _overview_zone_cost_known else None
 
     # 3) Compare annual NPK/NPKMg options with the submitted annual fertilizer budget.
-    _overview_budget = UI_SUBMISSION_DATA.get("fertilizerBudgetRp")
+    _overview_budget = FERTILIZER_BUDGET_RP
+    _overview_budget_per_ha = FERTILIZER_BUDGET_RP_PER_HA
     try:
         _overview_budget = float(_overview_budget) if _overview_budget is not None else None
         if _overview_budget is not None and (not _overview_math.isfinite(_overview_budget) or _overview_budget < 0):
@@ -5443,7 +5476,7 @@ def run_v2_scan(
         else:
             _display_row[-1] = ""
 
-    overview_headers = ["Blend option", "Label N-P₂O₅-K₂O-MgO (%)", "NPK full bags/farm/year", "NPK cost", "Zone Mg/Urea cost", "Combined estimate", "Budget target", "Budget difference", "Budget fit"]
+    overview_headers = ["Blend option", "Label N-P₂O₅-K₂O-MgO (%)", "NPK full bags/farm/year", "NPK cost", "Zone Mg/Urea cost", "Combined estimate", "Farm budget target (Rp)", "Budget difference", "Budget fit"]
     if _overview_npk_options:
         _overview_table(
             "3. Annual NPK/NPKMg matching — closest option to entered budget",
@@ -5525,12 +5558,18 @@ def run_v2_scan(
             "combined_estimate_formula": "NPK cost + zone Mg/Urea cost",
             "combined_estimate_rp": _candidate.get("combined_cost"),
             "budget_target_rp": _overview_budget,
+            "budget_target_rp_per_ha": _overview_budget_per_ha,
+            "budget_area_ha": FERTILIZER_BUDGET_AREA_HA,
+            "budget_formula": "fertilizerBudgetRp per hectare × farm.areaHa",
             "budget_difference_rp": _candidate.get("delta"),
             "closest_to_budget": _candidate is _overview_closest,
         })
     if "combined_fertilizer_calculations" in combined_result:
         combined_result["combined_fertilizer_calculations"]["annual_npk_budget_matching"] = {
             "budget_target_rp": _overview_budget,
+            "budget_target_rp_per_ha": _overview_budget_per_ha,
+            "budget_area_ha": FERTILIZER_BUDGET_AREA_HA,
+            "budget_formula": "fertilizerBudgetRp per hectare × farm.areaHa",
             "selected_zone_mg_urea_cost_rp": _overview_zone_topup_cost,
             "selected_zone_mg_urea_cost_breakdown": _overview_zone_product_cost_breakdown,
             "ranking_method": "smallest absolute difference between combined estimate and budget target",
@@ -5759,11 +5798,12 @@ def run_v2_scan(
             json.dump(combined_result, _json_file, indent=2, ensure_ascii=False, allow_nan=False)
 
     if _overview_budget is None:
-        print("Enter a nonnegative annual Rupiah value in fertilizerBudgetRp to identify which available option is closest to the budget.")
+        print("Enter a nonnegative annual Rupiah-per-hectare amount in fertilizerBudgetRp; it is multiplied by farm.areaHa for whole-farm comparisons.")
     elif not _overview_rankable:
         print("Cannot rank options against the budget because required configured bag prices or zone product costs are unavailable.")
     else:
-        print(f"Annual fertilizer budget: {_overview_rp(_overview_budget)}")
+        print(f"Annual fertilizer budget: {_overview_rp(_overview_budget_per_ha)}/ha × "
+              f"{FERTILIZER_BUDGET_AREA_HA:,.3f} ha = {_overview_rp(_overview_budget)} for the farm.")
         print(f"Zone top-up cost included: {_overview_rp(_overview_zone_topup_cost)} "
               f"({', '.join(_overview_zone_topup_labels) if _overview_zone_topup_labels else 'unavailable'}; whole bags).")
         print("Ranking uses the smallest absolute difference between the budget and "
