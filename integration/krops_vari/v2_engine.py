@@ -197,7 +197,7 @@ def run_v2_scan(
     OUTPUT_PLAIN_ZONE_WITH_SEPARATOR = str(OUTPUT_DIR / "oil_palm_zones_plain_with_separator.jpg")  # Plain zone overlay with shared white zone boundaries.
     OUTPUT_WHITE_ZONE_ANNOTATED = str(OUTPUT_DIR / "oil_palm_zones_white_separators.jpg")  # Original image with white zone boundaries and no zone-color fill.
     OUTPUT_WHITE_ZONE_NUMBERS = str(OUTPUT_DIR / "oil_palm_zones_white_separators_with_zone_numbers.jpg")  # White separators with Z1/Z2/... labels at zone centers.
-    WHITE_ZONE_BOUNDARY_WIDTH_PX = 9  # Thickness of the white-only shared zone boundaries in the separator image.
+    WHITE_ZONE_BOUNDARY_WIDTH_PX = 40  # Thickness of the white-only shared zone boundaries in the separator image.
     OUTPUT_ZONE_BASE_CROPS_DIR = str(OUTPUT_DIR / "oil_palm_zone_base_crops")  # Folder for original-image crops, one per zone.
     OUTPUT_ZONE_EXG_CROPS_DIR = str(OUTPUT_DIR / "oil_palm_zone_exg_crops")  # Folder for ExG-segmented image crops, one per zone.
     OUTPUT_PIPELINE_PLOT = str(OUTPUT_DIR / "oil_palm_pipeline_stages.jpg")  # Combined visualization of the analysis pipeline outputs.
