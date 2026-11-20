@@ -1,7 +1,7 @@
 {
   "farm": {
     "name": "Kebun Pak Sutrisno",
-    "areaHa": 1.0,
+    "areaHa": 2.0,
     "perimeterM": 800,
     "year": 2016,
     "soil": "Mineral",
@@ -37,5 +37,5 @@
     "freq": 2,
     "weightKg": 800
   },
-  "fertilizerBudgetRp": 5000000
+  "fertilizerBudgetRp": 10000000
 }

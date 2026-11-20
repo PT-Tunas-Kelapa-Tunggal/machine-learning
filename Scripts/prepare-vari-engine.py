@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
     setenv("PYTHONPATH", pypath, 1);
 
     char model_path[PATH_MAX];
-    snprintf(model_path, sizeof(model_path), "%s/models/yolo26m-krops-v0.1.mlpackage", engine_dir);
+    snprintf(model_path, sizeof(model_path), "%s/models/krops_model_v0.2_yolo26l.mlpackage", engine_dir);
     setenv("KROPS_MODEL_PATH", model_path, 0);
 
     char weather_dir[PATH_MAX];
@@ -139,11 +139,18 @@ int main(int argc, char *argv[]) {
 
 
 def main():
+    default_timing_src = Path(__file__).resolve().parent.parent / 'integration' / 'v2' / 'fertilization_timing'
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runtime', required=True, type=Path, help='Path to Python 3.11 environment prefix')
     parser.add_argument('--package-src', required=True, type=Path, help='Path to integration/krops_vari')
     parser.add_argument('--model-path', required=True, type=Path, help='Path to .mlpackage')
     parser.add_argument('--weather-src', required=True, type=Path, help='Path to weather directory')
+    parser.add_argument(
+        '--timing-src',
+        default=default_timing_src,
+        type=Path,
+        help='Path to integration/v2/fertilization_timing',
+    )
     parser.add_argument('--version', required=True, help='Release version tag (e.g. v0.1.0)')
     parser.add_argument('--commit', default='HEAD', help='Git commit SHA')
     parser.add_argument('--output', required=True, type=Path, help='Target staging directory')
@@ -153,6 +160,7 @@ def main():
     package_src = args.package_src.resolve()
     model_path = args.model_path.resolve()
     weather_src = args.weather_src.resolve()
+    timing_src = args.timing_src.resolve()
     output_dir = args.output.resolve()
 
     print(f"=== Preparing VariEngine Distribution ===")
@@ -160,6 +168,7 @@ def main():
     print(f"Package:     {package_src}")
     print(f"Model:       {model_path}")
     print(f"Weather:     {weather_src}")
+    print(f"Timing:      {timing_src}")
     print(f"Version:     {args.version}")
     print(f"Output:      {output_dir}")
 
@@ -192,6 +201,12 @@ def main():
 
     # 2. Copy source code and Core ML model
     print("[2/6] Copying krops_vari, model, and weather rules...")
+    if model_path.name != "krops_model_v0.2_yolo26l.mlpackage":
+        sys.exit(
+            f"error: Expected model 'krops_model_v0.2_yolo26l.mlpackage', but got '{model_path.name}'. "
+            "Fallback to legacy models is strictly disabled."
+        )
+
     dest_package = engine_dir / 'krops_vari'
     shutil.copytree(
         package_src,
@@ -199,6 +214,21 @@ def main():
         symlinks=True,
         ignore=shutil.ignore_patterns('__pycache__', '.git', '*.pyc', '.venv')
     )
+    if not (dest_package / 'timing.py').is_file():
+        sys.exit(f"error: Required package entry point missing: {package_src / 'timing.py'}")
+
+    for required_timing_file in ('fertilization_timing.py', 'krops_rules.py', 'weather_sources.py'):
+        if not (timing_src / required_timing_file).is_file():
+            sys.exit(f"error: Required fertilization timing module missing: {timing_src / required_timing_file}")
+
+    dest_timing = engine_dir / 'fertilization_timing'
+    shutil.copytree(
+        timing_src,
+        dest_timing,
+        symlinks=True,
+        ignore=shutil.ignore_patterns('__pycache__', '.git', '*.pyc', '.venv', '.env')
+    )
+    print(f"  Copied fertilization_timing verbatim from: {timing_src}")
 
     dest_models = engine_dir / 'models'
     dest_models.mkdir(parents=True, exist_ok=True)
