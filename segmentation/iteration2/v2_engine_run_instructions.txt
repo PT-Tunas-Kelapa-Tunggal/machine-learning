@@ -38,6 +38,6 @@ python v2_engine.py \
     "freq": 2,
     "weightKg": 800
   },
-  "fertilizerBudgetRp": 10000000
+  "fertilizerBudgetRp": 5000000
 }' \
   --image webodm_flight_3rd.jpeg

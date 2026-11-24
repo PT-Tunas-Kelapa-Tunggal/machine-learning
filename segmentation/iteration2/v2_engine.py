@@ -1,17 +1,19 @@
-"""Oil-palm zoning, VARI, and fertilizer analysis engine."""
+"""Notebook-exported oil-palm zoning, VARI, and fertilizer analysis CLI.
+
+This file is generated from notebook_iteration_2_clean.ipynb. It accepts the full
+farmer submission as a JSON string and an RGB/WebODM image path. It writes all
+results to the selected output directory and never opens image windows.
+"""
 from __future__ import annotations
 
 import json
 import os
 from pathlib import Path
-
-# Notebook-derived display shims are safe at import; pipeline dependencies and
-# image inference are deferred until run_v2_scan() is called.
 from html.parser import HTMLParser as _HTMLParser
 
 
 class HTML(str):
-    """Small string wrapper replacing IPython.display.HTML for CLI output."""
+    """String wrapper used by notebook display calls."""
 
 
 class _PlainHTML(_HTMLParser):
@@ -21,21 +23,23 @@ class _PlainHTML(_HTMLParser):
         self.in_cell = False
 
     def handle_starttag(self, tag, attrs):
-        if tag == 'tr':
-            if self.parts and not self.parts[-1].endswith('\n'):
-                self.parts.append('\n')
-        elif tag in ('td', 'th'):
+        if tag == "tr":
+            if self.parts and not self.parts[-1].endswith("\n"):
+                self.parts.append("\n")
+        elif tag in ("td", "th"):
             if self.in_cell:
-                self.parts.append(' | ')
+                self.parts.append(" | ")
             self.in_cell = True
+        elif tag == "br":
+            self.parts.append("\n")
 
     def handle_endtag(self, tag):
-        if tag in ('td', 'th'):
+        if tag in ("td", "th"):
             self.in_cell = False
-        elif tag == 'tr':
-            self.parts.append('\n')
-        elif tag in ('p', 'h1', 'h2', 'h3', 'br'):
-            self.parts.append('\n')
+        elif tag == "tr":
+            self.parts.append("\n")
+        elif tag in ("p", "h1", "h2", "h3", "h4"):
+            self.parts.append("\n")
 
     def handle_data(self, data):
         text = data.strip()
@@ -44,64 +48,68 @@ class _PlainHTML(_HTMLParser):
 
 
 def display(value):
-    """Print notebook display values in a terminal without opening a GUI."""
+    """Render notebook text and tables in a terminal; suppress image previews."""
     if isinstance(value, HTML):
         parser = _PlainHTML()
         parser.feed(str(value))
-        print(''.join(parser.parts).strip())
-    elif value.__class__.__name__ == 'DataFrame' and hasattr(value, 'to_string'):
-        print(value.to_string())
-    elif value.__class__.__module__.startswith(('PIL.', 'numpy')) and hasattr(value, 'shape'):
-        print(f'[Image preview omitted from terminal; dimensions/shape: {getattr(value, "size", getattr(value, "shape", None))}]')
-    else:
+        rendered = "".join(parser.parts).strip()
+        if rendered:
+            print(rendered)
+    elif isinstance(value, (str, int, float, dict, list, tuple)):
         print(value)
+    elif value.__class__.__name__ in ("DataFrame", "Series") and hasattr(value, "to_string"):
+        print(value.to_string())
+    # PIL images, matplotlib figures, and other rich objects stay silent in CLI mode.
 
 
 _npk_display = display
 _NPKHTML = HTML
 _overview_display = display
 _OverviewHTML = HTML
+_tree_summary_display = display
+_TreeSummaryHTML = HTML
 
 CONCRETE_MODEL_NAME = "krops_model_v0.2_yolo26l.mlpackage"
 
 
-def run_v2_scan(
-    image_path: str | Path,
-    user_submission_data: dict | str,
-    output_dir: str | Path = Path("outputs"),
-    model_path: str | Path | None = None,
-) -> dict:
-    """Run the analysis and write outputs to `output_dir`.
+def _resolve_model_path() -> Path:
+    """Resolve the fixed CoreML model beside this script, then from the working directory."""
+    candidates = (
+        Path(__file__).resolve().parent / CONCRETE_MODEL_NAME,
+        Path(__file__).resolve().parents[1] / CONCRETE_MODEL_NAME,
+        Path.cwd() / CONCRETE_MODEL_NAME,
+    )
+    model = next((candidate for candidate in candidates if candidate.exists()), candidates[0])
+    model = model.resolve()
+    if not model.exists():
+        raise FileNotFoundError(f"CoreML model not found: {model}")
+    return model
 
-    The submission argument accepts a decoded object or a raw JSON string.
-    The result follows the tagged v2 engine contract and is saved as
-    ``vari_result.json`` alongside ``oil_palm_zones_vari.json``.
-    """
-    if isinstance(user_submission_data, str):
-        user_submission_data = json.loads(user_submission_data)
-    if not isinstance(user_submission_data, dict):
-        raise ValueError("User submission must be a JSON object")
-    _USER_SUBMISSION_DATA = user_submission_data
 
-    image_path = Path(image_path).resolve()
-    if not image_path.is_file():
-        raise FileNotFoundError(f"Image not found: {image_path}")
-
-    configured_model = model_path or os.environ.get("KROPS_MODEL_PATH")
-    if configured_model is None:
-        model_candidates = (
-            Path(__file__).resolve().parent / CONCRETE_MODEL_NAME,
-            Path(__file__).resolve().parents[1] / CONCRETE_MODEL_NAME,
-            Path.cwd() / CONCRETE_MODEL_NAME,
-        )
-        resolved_model = next((candidate for candidate in model_candidates if candidate.exists()), model_candidates[0])
+def run_analysis(user_request_submission_json: str | dict, image_path: str | Path, output_dir: str | Path = "outputs") -> dict:
+    """Run the notebook pipeline from a JSON string/object and an RGB/WebODM image."""
+    if isinstance(user_request_submission_json, str):
+        try:
+            user_submission_data = json.loads(user_request_submission_json)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"--user-request-submission-json must be valid JSON: {exc}") from exc
     else:
-        resolved_model = Path(configured_model)
-    resolved_model = resolved_model.resolve()
-    if not resolved_model.exists():
-        raise FileNotFoundError(f"CoreML model not found: {resolved_model}")
+        user_submission_data = user_request_submission_json
+    if not isinstance(user_submission_data, dict):
+        raise ValueError("The user submission JSON must be an object.")
 
-    # %% Notebook code cell 2
+    input_image = Path(image_path).expanduser().resolve()
+    if not input_image.is_file():
+        raise FileNotFoundError(f"Image not found: {input_image}")
+    model_path = _resolve_model_path()
+    resolved_output_dir = Path(output_dir).expanduser().resolve()
+    resolved_output_dir.mkdir(parents=True, exist_ok=True)
+    _USER_SUBMISSION_DATA = user_submission_data
+    _INPUT_IMAGE = input_image
+    _OUTPUT_DIR = resolved_output_dir
+    _MODEL_PATH = model_path
+
+    # %% Notebook code cell 3
     import csv
     import math
     import calendar
@@ -119,7 +127,7 @@ def run_v2_scan(
     import coremltools as ct
     import cv2
     import matplotlib
-    matplotlib.use("Agg")  # Save figures without opening GUI windows.
+    matplotlib.use("Agg")  # Save plots without opening GUI windows.
     import matplotlib.pyplot as plt
     import matplotlib.patheffects as path_effects
     import numpy as np
@@ -128,25 +136,25 @@ def run_v2_scan(
     import matplotlib.cm as cm
     import matplotlib.colors as mcolors
 
-    # %% Notebook code cell 4
+    # %% Notebook code cell 5
     # ------------------------- Configuration -------------------------
     # All generated files (images, tables, JSON, and crop folders) go here.
-    OUTPUT_DIR = Path(output_dir).resolve()
+    OUTPUT_DIR = _OUTPUT_DIR
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    IMAGE_PATH = str(image_path)  # Input image supplied to run_v2_scan.
+    IMAGE_PATH = str(_INPUT_IMAGE)
     # IMAGE_PATH = "webodm_last_image_1st_flight.jpeg"
-    MODEL_PATH = str(resolved_model)  # CoreML model resolved by run_v2_scan.
+    MODEL_PATH = str(_MODEL_PATH)
     # MODEL_PATH = "yolo26m-krops-v0.1.mlpackage"  # CoreML object-detection model used to detect palm trees.
     OUTPUT_JSON = str(OUTPUT_DIR / "oil_palm_zones_vari.json")  # JSON with metadata, zone/tree statistics, and recommendations.
     OUTPUT_FERTILIZER_HISTORY_JSON = str(OUTPUT_DIR / "user_fertilizer_summary.json")  # Coordinates and annual total product mass from submitted fertilizer history.
     OUTPUT_DECIMALS = 6  # Shared decimal precision for fertilizer and nutrient outputs.
     OUTPUT_TREE_VARI_HEATMAP_DIR = str(OUTPUT_DIR / "oil_palm_tree_vari_heatmaps")  # One ExG-masked VARI heatmap crop per detected tree.
+    OUTPUT_TREE_QUARTILE_CROPS_DIR = str(OUTPUT_DIR / "oil_palm_tree_crops_by_vari_quartile")  # Untouched original RGB tree crops grouped into Q1–Q4 folders.
     OUTPUT_TREE_VARI_HEATMAP_MONTAGE = str(OUTPUT_DIR / "oil_palm_tree_vari_heatmap_montage.png")  # Tiled preview of all per-tree heatmaps.
     OUTPUT_FIELD_TREE_VARI_QUARTILE = str(OUTPUT_DIR / "oil_palm_field_tree_vari_quartiles.jpg")  # Full-field tree overlay colored by each tree's VARI quartile.
 
     # UI submission input: this file represents the fields entered in the farm/profile screens.
-    # Submission object comes directly from the function argument.
     UI_SUBMISSION_DATA = _USER_SUBMISSION_DATA
     UI_FARM_INPUT = UI_SUBMISSION_DATA.get("farm", {})
     FERTILIZER_BUDGET_RP_PER_HA = UI_SUBMISSION_DATA.get("fertilizerBudgetRp")  # User-entered annual budget per hectare.
@@ -197,7 +205,7 @@ def run_v2_scan(
     OUTPUT_PLAIN_ZONE_WITH_SEPARATOR = str(OUTPUT_DIR / "oil_palm_zones_plain_with_separator.jpg")  # Plain zone overlay with shared white zone boundaries.
     OUTPUT_WHITE_ZONE_ANNOTATED = str(OUTPUT_DIR / "oil_palm_zones_white_separators.jpg")  # Original image with white zone boundaries and no zone-color fill.
     OUTPUT_WHITE_ZONE_NUMBERS = str(OUTPUT_DIR / "oil_palm_zones_white_separators_with_zone_numbers.jpg")  # White separators with Z1/Z2/... labels at zone centers.
-    WHITE_ZONE_BOUNDARY_WIDTH_PX = 9  # Thickness of the white-only shared zone boundaries in the separator image.
+    WHITE_ZONE_BOUNDARY_WIDTH_PX = 60  # Thickness of the white-only shared zone boundaries in the separator image.
     OUTPUT_ZONE_BASE_CROPS_DIR = str(OUTPUT_DIR / "oil_palm_zone_base_crops")  # Folder for original-image crops, one per zone.
     OUTPUT_ZONE_EXG_CROPS_DIR = str(OUTPUT_DIR / "oil_palm_zone_exg_crops")  # Folder for ExG-segmented image crops, one per zone.
     OUTPUT_PIPELINE_PLOT = str(OUTPUT_DIR / "oil_palm_pipeline_stages.jpg")  # Combined visualization of the analysis pipeline outputs.
@@ -343,7 +351,7 @@ def run_v2_scan(
     MIN_REFERENCE_ZONES_SUGGESTED = 5  # Emit a metadata note when fewer valid reference zones qualify.
     # -----------------------------------------------------------------
 
-    # %% Notebook code cell 6
+    # %% Notebook code cell 7
     def iou(box1, box2):
         x1, y1 = max(box1[0], box2[0]), max(box1[1], box2[1])
         x2, y2 = min(box1[2], box2[2]), min(box1[3], box2[3])
@@ -721,7 +729,7 @@ def run_v2_scan(
             f"<tbody>{body_html}</tbody></table></div>"
         ))
 
-    # %% Notebook code cell 8
+    # %% Notebook code cell 9
     def print_zone_vari_table(zone_json):
         """Print annual VARI-derived elemental nutrient supplements by zone."""
         nutrients = [nutrient for nutrient, rate in MAX_NUTRIENT_KG_HA_PER_YEAR.items() if rate is not None]
@@ -942,7 +950,7 @@ def run_v2_scan(
                       f"{per_palm_text} kg {nutrient}/palm/year")
         print("Values above are additional annual elemental Mg or N supplements, not full product rates or full fertilizer-program totals.")
 
-    # %% Notebook code cell 10
+    # %% Notebook code cell 11
     OUTPUT_DECIMALS = globals().get("OUTPUT_DECIMALS", 6)  # Fallback for running this output cell before the main config cell.
 
     def save_zone_vari_csv(zone_json, output_path):
@@ -1157,12 +1165,11 @@ def run_v2_scan(
 
 
     def build_and_print_zone_bag_purchase_table(product_mass_rows):
-        """Convert each zone's base-plus-boost product amount into bag equivalents."""
+        """Show raw annual product need and the full-bag amount to purchase for the field."""
         print("\n--- Zone Fertilizer Bag Purchase Estimate (annual) ---")
-        print("Uses the base + VARI supplement product total per zone whenever it is available.")
-        print("If that combined zone total is N/A, fallback = supplement kg/palm/year × zone tree count + base product kg/zone/year.")
-        print("Field bags to buy = round up the summed annual product kg across zones ÷ configured bag size.")
-        print("Cost uses the configured rupiah price per bag; zone costs are proportional allocations, and field purchase cost uses whole bags.")
+        print("Zone requirements stay in raw kg; each zone amount is base product + VARI supplement.")
+        print("For field purchasing, sum raw kg across zones, then buy the smallest whole number of configured bags that covers that total.")
+        print("Purchased kg = full bags to buy × bag size; this is the amount supplied by the purchased bags, not the fertilizer need.")
         print("Dolomite/kieserite are alternative Mg sources; ZA/urea are alternative N sources. Choose one source per nutrient.")
         products = list(FERTILIZER_NUTRIENT_BY_PRODUCT)
         rows_by_product = {product: [] for product in products}
@@ -1190,26 +1197,28 @@ def run_v2_scan(
                 # Prefer the explicit combined amount. If it is N/A, rebuild the zone
                 # total from supplement-per-palm and the always-applied base product.
                 if combined_zone_kg is not None:
-                    amount_for_bags_kg = float(combined_zone_kg)
+                    amount_for_purchase_kg = float(combined_zone_kg)
                 elif supplement_palm_kg is not None and tree_count > 0:
-                    amount_for_bags_kg = (float(supplement_palm_kg) * tree_count
-                                          + float(base_zone_kg or 0.0))
+                    amount_for_purchase_kg = (float(supplement_palm_kg) * tree_count
+                                              + float(base_zone_kg or 0.0))
                     calculation_source = "supplement_per_palm_times_tree_count_plus_base_zone_total"
                     if combined_palm_kg is None:
-                        combined_palm_kg = amount_for_bags_kg / tree_count
+                        combined_palm_kg = amount_for_purchase_kg / tree_count
                 else:
-                    amount_for_bags_kg = None
+                    amount_for_purchase_kg = None
                     all_known = False
                     calculation_source = "unavailable"
 
-                exact_bags = amount_for_bags_kg / bag_size if amount_for_bags_kg is not None else None
-                if amount_for_bags_kg is not None:
-                    total_product_kg += amount_for_bags_kg
+                # This fraction is retained in JSON for backward compatibility, but
+                # the printed purchase table reports only whole bags and purchased kg.
+                exact_bags = amount_for_purchase_kg / bag_size if amount_for_purchase_kg is not None else None
+                if amount_for_purchase_kg is not None:
+                    total_product_kg += amount_for_purchase_kg
                 output_rows.append({
                     "zone_id": item.get("zone_id"),
                     "product": product,
                     "nutrient": item.get("nutrient"),
-                    "base_plus_supplement_product_kg_per_zone_per_year": amount_for_bags_kg,
+                    "base_plus_supplement_product_kg_per_zone_per_year": amount_for_purchase_kg,
                     "base_plus_supplement_product_kg_per_palm_per_year": combined_palm_kg,
                     "supplement_product_kg_per_palm_per_year": supplement_palm_kg,
                     "base_product_kg_per_zone_per_year": base_zone_kg,
@@ -1222,24 +1231,26 @@ def run_v2_scan(
                     "field_total_product_kg_per_year": None,
                     "field_total_bag_equivalent": None,
                     "full_bags_to_buy_for_field": None,
+                    "purchase_quantity_kg_for_field": None,
                 })
                 display_rows.append([
                     str(item.get("zone_id")), product,
-                    "N/A" if amount_for_bags_kg is None else f"{amount_for_bags_kg:.{OUTPUT_DECIMALS}f}",
+                    "N/A" if amount_for_purchase_kg is None else f"{amount_for_purchase_kg:.{OUTPUT_DECIMALS}f}",
                     "N/A" if combined_palm_kg is None else f"{float(combined_palm_kg):.{OUTPUT_DECIMALS}f}",
                     f"{bag_size:.{OUTPUT_DECIMALS}f}",
-                    "N/A" if exact_bags is None else f"{exact_bags:.{OUTPUT_DECIMALS}f}",
-                    calculation_source,
-                    "—",
+                    "—", "—",
                     "—" if price_per_bag is None else f"Rp{price_per_bag:,.0f}",
                     "N/A" if exact_bags is None or price_per_bag is None else f"Rp{exact_bags * price_per_bag:,.0f}",
                     "—",
                 ])
 
+            # Sum actual required kilograms first. Purchase complete bags sufficient
+            # to cover this need; only the final field bag count is rounded upward.
+            full_bags = (int(math.ceil(total_product_kg / bag_size - 1e-12))
+                         if all_known and total_product_kg > 0
+                         else 0 if all_known and total_product_kg == 0 else None)
+            purchase_quantity_kg = full_bags * bag_size if full_bags is not None else None
             field_bag_equivalent = total_product_kg / bag_size if all_known else None
-            full_bags = (int(math.ceil(field_bag_equivalent - 1e-12))
-                         if field_bag_equivalent is not None and field_bag_equivalent > 0
-                         else 0 if field_bag_equivalent == 0 else None)
             total_row = {
                 "zone_id": "FIELD TOTAL",
                 "product": product,
@@ -1254,38 +1265,39 @@ def run_v2_scan(
                 "field_total_product_kg_per_year": total_product_kg if all_known else None,
                 "field_total_bag_equivalent": field_bag_equivalent,
                 "full_bags_to_buy_for_field": full_bags,
+                "purchase_quantity_kg_for_field": purchase_quantity_kg,
                 "price_per_bag_rp": price_per_bag,
                 "exact_field_cost_rp": (field_bag_equivalent * price_per_bag
                                          if field_bag_equivalent is not None and price_per_bag is not None else None),
                 "full_bag_purchase_cost_rp": (full_bags * price_per_bag
                                                if full_bags is not None and price_per_bag is not None else None),
+                "unused_product_kg_after_field_need": (purchase_quantity_kg - total_product_kg
+                                                         if purchase_quantity_kg is not None else None),
             }
             output_rows.append(total_row)
             display_rows.append([
                 "FIELD TOTAL", product,
                 "N/A" if not all_known else f"{total_product_kg:.{OUTPUT_DECIMALS}f}",
                 "—", f"{bag_size:.{OUTPUT_DECIMALS}f}",
-                "N/A" if field_bag_equivalent is None else f"{field_bag_equivalent:.{OUTPUT_DECIMALS}f}",
-                "sum zone totals ÷ bag size", "N/A" if full_bags is None else str(full_bags),
+                "N/A" if full_bags is None else str(full_bags),
+                "N/A" if purchase_quantity_kg is None else f"{purchase_quantity_kg:.{OUTPUT_DECIMALS}f}",
                 "—" if price_per_bag is None else f"Rp{price_per_bag:,.0f}",
                 "N/A" if field_bag_equivalent is None or price_per_bag is None else f"Rp{field_bag_equivalent * price_per_bag:,.0f}",
                 "N/A" if full_bags is None or price_per_bag is None else f"Rp{full_bags * price_per_bag:,.0f}",
             ])
 
-        headers = ["Zone", "Product", "Base + supplement kg/zone/year", "Base + supplement kg/palm/year",
-                   "Bag kg", "Exact bag equivalents", "Quantity calculation", "Full bags to buy (field total)",
-                   "Price/bag", "Allocated/exact cost", "Whole-bag field cost"]
+        headers = ["Zone", "Product", "Raw need kg/zone/year", "Raw need kg/palm/year",
+                   "Bag size kg", "Full bags to buy (field)", "Purchased kg (field)", "Price/bag",
+                   "Estimated zone share cost", "Whole-bag field cost"]
         widths = [max(len(headers[i]), *(len(row[i]) for row in display_rows)) for i in range(len(headers))]
         print(" | ".join(headers[i].ljust(widths[i]) for i in range(len(headers))))
         print("-+-".join("-" * width for width in widths))
         for row in display_rows:
             print(" | ".join(value.ljust(widths[i]) for i, value in enumerate(row)))
-        print("For a zone with a combined total: bags equivalent = base + supplement kg/zone/year ÷ bag kg.")
-        print("Fallback when combined total is N/A: (supplement kg/palm/year × tree count + base kg/zone/year) ÷ bag kg.")
-        print("Only the FIELD TOTAL is rounded up; per-zone bag equivalents and allocated costs are proportional, not separate purchases.")
-        print("Whole-bag field cost = rounded-up field bag count × price per bag. Missing product prices remain N/A.")
+        print("Raw need is the sum of the zone kg requirements. For example, 8.062483 kg need is covered by one 50 kg bag; purchased kg is 50, while the unused remainder is 41.937517 kg.")
+        print("Field bags to buy = the smallest whole-bag count whose total bag mass covers the summed raw need; the table does not show fractional bags.")
+        print("Estimated zone share cost allocates the exact product need proportionally; whole-bag field cost is full bags to buy × price/bag.")
         return output_rows
-
 
     def save_product_mass_csv(rows, output_path):
         """Save product-mass conversions separately from the elemental zone CSV."""
@@ -1303,7 +1315,7 @@ def run_v2_scan(
             writer.writeheader()
             writer.writerows(rows)
 
-    # %% Notebook code cell 12
+    # %% Notebook code cell 13
     def save_vari_distribution_plot(zone_json, output_path):
         """Plot zone mean VARI values and identify which fall from P25 to P95."""
         valid_zones = [
@@ -1351,7 +1363,7 @@ def run_v2_scan(
         fig.savefig(output_path, dpi=200, bbox_inches="tight")
         plt.close(fig)
 
-    # %% Notebook code cell 14
+    # %% Notebook code cell 15
     def load_zone_areas():
         """Return supplied ground area in hectares by zone ID; never infer from pixels."""
         areas = {str(k): float(v) for k, v in ZONE_AREA_HA_BY_ID.items()}
@@ -1659,7 +1671,7 @@ def run_v2_scan(
             zone["recommendation"] = recommendation
         return reference
 
-    # %% Notebook code cell 16
+    # %% Notebook code cell 17
     # Copied from weather/l6_vari_confidence.py, weather/krops_rules.py, weather/nasa_power_job.py, weather/solar.py on feat/weather-vari-confidence (6175bca); keep in sync.
 
     # The confidence rule (l6_vari_confidence.py)
@@ -1721,7 +1733,7 @@ def run_v2_scan(
     display(factors)
     print("Labels: " + " · ".join(f"{name} ≥ {floor}" for floor, name in LABELS) + " · otherwise rendah")
 
-    # %% Notebook code cell 17
+    # %% Notebook code cell 18
     # Copied from weather/l6_vari_confidence.py on feat/weather-vari-confidence (6175bca); keep in sync.
     def sun_factor(elevation_deg):
         """(factor, class) for the lowest sun elevation during the flight."""
@@ -1836,7 +1848,7 @@ def run_v2_scan(
             "reasons": [_reason(name, f) for name, f in factors.items() if f["value"] < 1],
         }
 
-    # %% Notebook code cell 18
+    # %% Notebook code cell 19
     # Copied from weather/solar.py, weather/l6_vari_confidence.py on feat/weather-vari-confidence (6175bca); keep in sync.
     def _sin(deg):
         return math.sin(math.radians(deg))
@@ -1949,7 +1961,7 @@ def run_v2_scan(
         mid = start + (end - start) / 2
         return round(min(solar_position(lat, lon, t)["elevation_deg"] for t in (start, mid, end)), 1)
 
-    # %% Notebook code cell 19
+    # %% Notebook code cell 20
     # Copied from weather/nasa_power_job.py, weather/krops_rules.py on feat/weather-vari-confidence (6175bca); keep in sync.
     def _snap(value, step, offset=0.0):
         return math.floor((value + offset) / step + 0.5) * step - offset  # round half up, the same in Swift
@@ -2147,7 +2159,7 @@ def run_v2_scan(
                 day = stop + timedelta(days=1)
             return daily_from_pairs(pairs)
 
-    # %% Notebook code cell 20
+    # %% Notebook code cell 21
     # Copied from weather/l6_vari_confidence.py on feat/weather-vari-confidence (6175bca); keep in sync.
     def flight_cloud(hours, start, end):
         """Mean cloud cover over the hours the flight overlaps; None if none of them has a value."""
@@ -2236,7 +2248,7 @@ def run_v2_scan(
                 cloud = {"cover": None, "class": clearness_class(clearness), "source": "nasa-power", "clearness": clearness}
         return cloud, rain
 
-    # %% Notebook code cell 21
+    # %% Notebook code cell 22
     # Copied from weather/krops_rules.py, weather/nasa_power_job.py, weather/l2_scan_rain.py, weather/l6_vari_confidence.py on feat/weather-vari-confidence (6175bca); keep in sync.
     def _present(daily):
         return {d: float(v) for d, v in (daily or {}).items() if v is not None}
@@ -2410,7 +2422,7 @@ def run_v2_scan(
                 log.warning("NASA POWER unavailable before %s", scan_day, exc_info=True)
         return _iso_record(p30_at({"weatherkit-history": wk_rain, "nasa-power": checked}, scan_day))
 
-    # %% Notebook code cell 22
+    # %% Notebook code cell 23
     # Copied from weather/l6_vari_confidence.py on feat/weather-vari-confidence (6175bca); keep in sync.
     def _utc(text):
         return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(timezone.utc)
@@ -2431,7 +2443,8 @@ def run_v2_scan(
                 "computed_at": computed_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "flight": {"start": scan["flight_start"], "end": scan["flight_end"]}} | result | {"vari": scan.get("vari")}
 
-    # %% Notebook code cell 24
+
+    # %% Notebook code cell 25
     image_path = Path(IMAGE_PATH)
     model_path = Path(MODEL_PATH)
     if not image_path.exists():
@@ -2454,10 +2467,10 @@ def run_v2_scan(
     axes[0].imshow(original_rgb); axes[0].set_title("Input image"); axes[0].axis("off")
     axes[1].imshow(exg_mask, cmap="gray", vmin=0, vmax=255); axes[1].set_title("ExG vegetation mask"); axes[1].axis("off")
     axes[2].imshow(segmented_rgb); axes[2].set_title("RGB pixels retained by ExG"); axes[2].axis("off")
-    plt.tight_layout(); plt.close('all'); plt.close(fig)
+    plt.tight_layout(); plt.close(); plt.close(fig)
     print(f"Image size: {width:,} × {height:,} px; vegetation pixels: {int(np.count_nonzero(exg_mask)):,} ({np.mean(exg_mask > 0):.1%})")
 
-    # %% Notebook code cell 26
+    # %% Notebook code cell 27
     print("2/7: Loading CoreML model and running tiled inference on the ExG-segmented image...")
     model = ct.models.MLModel(str(model_path))
     normalized_boxes, scores, inference_tile_summary = parse_coreml_predictions_tiled(
@@ -2552,7 +2565,7 @@ def run_v2_scan(
         ["Confidence threshold", CONF_THRESHOLD],
     ])
 
-    # %% Notebook code cell 28
+    # %% Notebook code cell 29
     # Score the current photo's flight when the real flight times and location are configured.
     WEATHER_FLIGHT_CONFIDENCE = None
     FLIGHT_CONFIDENCE = None
@@ -2625,7 +2638,7 @@ def run_v2_scan(
         print("Weather flight confidence skipped: set actual flight times and farm latitude/longitude in Configuration.")
         print(f"Zone confidence will use the configured fallback: {DEFAULT_ZONE_CONFIDENCE:.2f}.")
 
-    # %% Notebook code cell 29
+    # %% Notebook code cell 30
     print("3/7: Calculating VARI map and tree-level statistics...")
     b, g, r = cv2.split(original_bgr)
     b = b.astype(np.float32)
@@ -2742,7 +2755,7 @@ def run_v2_scan(
         [f"Z{z['zone_id']}", len(z["trees"]), z.get("approx_row"), str(z["bbox"])] for z in zones
     ])
 
-    # %% Notebook code cell 31
+    # %% Notebook code cell 32
     print("5/7: Coloring ExG tree masks by zone and calculating zone statistics...")
     try:
         font = ImageFont.truetype("Arial.ttf", max(12, min(24, width // 100)))
@@ -2859,7 +2872,7 @@ def run_v2_scan(
         for z in zone_json
     ])
 
-    # %% Notebook code cell 33
+    # %% Notebook code cell 34
     # Build a four-color VARI heatmap for each detected tree, using shared pixel quartiles.
     from matplotlib.colors import ListedColormap, BoundaryNorm
 
@@ -2955,7 +2968,7 @@ def run_v2_scan(
         )
         fig.suptitle("One color per tree — assigned by tree mean VARI quartile", fontsize=15, fontweight="bold")
         plt.savefig(OUTPUT_TREE_VARI_HEATMAP_MONTAGE, dpi=160, bbox_inches="tight")
-        plt.close('all')
+        plt.close()
         plt.close(fig)
     else:
         print("No tree detections available for per-tree VARI heatmaps.")
@@ -2963,7 +2976,88 @@ def run_v2_scan(
     print(f"Saved {len(tree_heatmap_paths)} individual heatmaps in: {tree_heatmap_dir.resolve()}")
     print(f"Montage: {Path(OUTPUT_TREE_VARI_HEATMAP_MONTAGE).resolve()}")
 
-    # %% Notebook code cell 35
+    # Show a ranked table directly below the heatmap montage (highest mean VARI first).
+
+    _tree_summary_rows = []
+    for _tree in trees:
+        _mean = _tree.get("vari", {}).get("mean_vari")
+        _mean = float(_mean) if _mean is not None and np.isfinite(_mean) else None
+        _tree_summary_rows.append({
+            "tree_id": int(_tree["tree_id"]),
+            "mean_vari": _mean,
+            "quartile": _tree.get("vari_quartile") or "N/A",
+        })
+    _tree_summary_rows.sort(key=lambda _row: (
+        _row["mean_vari"] is None,
+        -_row["mean_vari"] if _row["mean_vari"] is not None else 0.0,
+        _row["tree_id"],
+    ))
+
+    def _format_tree_summary_row(_rank, _row):
+        _mean_text = f"{_row['mean_vari']:.6f}" if _row["mean_vari"] is not None else "N/A"
+        return (
+            "<tr>"
+            f"<td>{_rank}</td>"
+            f"<td>Tree {_row['tree_id']}</td>"
+            f"<td>{_mean_text}</td>"
+            f"<td>{_row['quartile']}</td>"
+            "</tr>"
+        )
+
+    _tree_table_rows = "\n".join(
+        _format_tree_summary_row(_rank, _row)
+        for _rank, _row in enumerate(_tree_summary_rows, start=1)
+    )
+    _tree_table_html = (
+        "<h3>Per-tree VARI ranking (highest mean to lowest)</h3>"
+        "<table style='border-collapse:collapse;width:100%;'>"
+        "<thead><tr>"
+        "<th style='text-align:left;padding:6px;border-bottom:1px solid #999;'>Rank</th>"
+        "<th style='text-align:left;padding:6px;border-bottom:1px solid #999;'>Tree</th>"
+        "<th style='text-align:right;padding:6px;border-bottom:1px solid #999;'>Mean VARI</th>"
+        "<th style='text-align:left;padding:6px;border-bottom:1px solid #999;'>VARI quartile</th>"
+        "</tr></thead>"
+        f"<tbody>{_tree_table_rows}</tbody></table>"
+        "<p>Rows with no valid mean VARI appear last.</p>"
+    )
+    _tree_summary_display(_TreeSummaryHTML(_tree_table_html))
+
+    # %% Notebook code cell 36
+    # Save the raw original RGB crop for every detected tree, grouped by its already-assigned quartile.
+    tree_quartile_crop_root = Path(OUTPUT_TREE_QUARTILE_CROPS_DIR)
+    tree_quartile_crop_root.mkdir(parents=True, exist_ok=True)
+    tree_quartile_crop_counts = {f"Q{i}": 0 for i in range(1, 5)}
+    tree_quartile_crop_counts["unclassified"] = 0
+
+    # Remove only previous exports made by this step, so reruns do not leave stale tree crops.
+    for _quartile_folder in [*(f"Q{i}" for i in range(1, 5)), "unclassified"]:
+        _folder_path = tree_quartile_crop_root / _quartile_folder
+        if _folder_path.exists():
+            for _old_crop in _folder_path.glob("tree_*_original.png"):
+                _old_crop.unlink()
+
+    for _tree, _x1, _y1, _x2, _y2, _overlay_mask, _quartile_index in tree_heatmap_data:
+        _crop_x1 = max(0, min(int(_x1), original_rgb.shape[1]))
+        _crop_y1 = max(0, min(int(_y1), original_rgb.shape[0]))
+        _crop_x2 = max(_crop_x1, min(int(_x2), original_rgb.shape[1]))
+        _crop_y2 = max(_crop_y1, min(int(_y2), original_rgb.shape[0]))
+        if _crop_x2 <= _crop_x1 or _crop_y2 <= _crop_y1:
+            print(f"Skipping T{_tree.get('tree_id')}: empty crop bounds.")
+            continue
+        _quartile_folder = f"Q{int(_quartile_index) + 1}" if _quartile_index is not None else "unclassified"
+        _tree_crop = original_rgb[_crop_y1:_crop_y2, _crop_x1:_crop_x2]
+        _tree_crop_path = tree_quartile_crop_root / _quartile_folder / f"tree_{int(_tree['tree_id']):03d}_original.png"
+        _tree_crop_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(_tree_crop).save(_tree_crop_path, format="PNG")
+        _tree["original_crop_by_vari_quartile"] = str(_tree_crop_path.resolve())
+        tree_quartile_crop_counts[_quartile_folder] += 1
+
+    print("Original RGB tree crops saved by VARI quartile:")
+    for _quartile_folder, _crop_count in tree_quartile_crop_counts.items():
+        print(f"  {_quartile_folder}: {_crop_count} trees")
+    print(f"Crop folders: {tree_quartile_crop_root.resolve()}")
+
+    # %% Notebook code cell 38
     # Paint each tree's assigned VARI quartile onto its location in the complete field image.
     field_quartile_rgb = original_rgb.copy()
     field_tree_color_overlay = field_quartile_rgb.copy()
@@ -2992,10 +3086,10 @@ def run_v2_scan(
     plt.title("Full field — one VARI quartile color per tree", fontweight="bold")
     plt.axis("off")
     plt.tight_layout()
-    plt.close('all')
+    plt.close()
     print(f"Full-field tree quartile overlay saved to: {Path(OUTPUT_FIELD_TREE_VARI_QUARTILE).resolve()}")
 
-    # %% Notebook code cell 37
+    # %% Notebook code cell 40
     # Draw only the Zone ID text labels (no bounding boxes)
     for zx, zy, zone_label, zone_color in zone_label_positions:
         for canvas in (draw_zones_only, draw_combined):
@@ -3147,13 +3241,13 @@ def run_v2_scan(
     axes[0].imshow(zones_only_img); axes[0].set_title("Zone pixels only"); axes[0].axis("off")
     axes[1].imshow(combined_annotated_img); axes[1].set_title("Zones + tree/boost annotations"); axes[1].axis("off")
     axes[2].imshow(white_separator_img); axes[2].set_title("White zone boundaries"); axes[2].axis("off")
-    plt.tight_layout(); plt.close('all'); plt.close(fig)
+    plt.tight_layout(); plt.close(); plt.close(fig)
     show_preview_table("Zone center points", ["Zone", "Center x (px)", "Center y (px)", "Normalized x", "Normalized y"], [
         [f"Z{z['zone_id']}", z["center_point"]["x"], z["center_point"]["y"], z["center_point"]["normalized_x"], z["center_point"]["normalized_y"]]
         for z in zone_json
     ])
 
-    # %% Notebook code cell 39
+    # %% Notebook code cell 42
     zone_base_crops_dir = Path(OUTPUT_ZONE_BASE_CROPS_DIR)
     zone_exg_crops_dir = Path(OUTPUT_ZONE_EXG_CROPS_DIR)
     zone_base_crops_dir.mkdir(parents=True, exist_ok=True)
@@ -3188,9 +3282,9 @@ def run_v2_scan(
             if exg_path and Path(exg_path).exists():
                 axes[row, 1].imshow(plt.imread(exg_path))
             axes[row, 1].set_title(f"Z{zone['zone_id']} — ExG crop"); axes[row, 1].axis("off")
-        plt.tight_layout(); plt.close('all'); plt.close(fig)
+        plt.tight_layout(); plt.close(); plt.close(fig)
 
-    # %% Notebook code cell 41
+    # %% Notebook code cell 44
     # Save CSV and print summary table
     save_zone_vari_csv(zone_json, OUTPUT_ZONE_CSV)
     print_zone_vari_table(zone_json)
@@ -3341,7 +3435,7 @@ def run_v2_scan(
         ["JSON result", str(Path(OUTPUT_JSON).resolve())],
     ])
 
-    # %% Notebook code cell 43
+    # %% Notebook code cell 46
     # Image.MAX_IMAGE_PIXELS = 933120000 
 
     # # Build and save the 3x3 visualization figure with per-tree heatmaps, VARI table, distribution, and boundaries
@@ -3477,11 +3571,11 @@ def run_v2_scan(
     # #     cp = z["center_point"]
     # #     print(f"      Zone {z['zone_id']}: x = {cp['x']}, y = {cp['y']} (normalized: x = {cp['normalized_x']:.4f}, y = {cp['normalized_y']:.4f})")
     # # if SHOW_PLOTS:
-    # #     plt.close('all')
+    # #     plt.close()
     # # else:
     # #     plt.close(fig)
 
-    # %% Notebook code cell 46
+    # %% Notebook code cell 49
     # Imports for this standalone comparison section (also works if this section is run by itself).
     import math
     import html as _npk_html
@@ -3561,13 +3655,25 @@ def run_v2_scan(
     MAX_NPK_COST_OVER_BUDGET_PERCENT = 15.0  # Configurable maximum spend above the submitted annual budget.
     NPK_AGE_REFERENCE_DATE = _npk_date.today()  # Used with farm planting year/month to select an age band.
 
-    # Current project baseline. Values are elemental nutrient rates in kg/ha/year.
-    BASELINE_ELEMENTAL_KG_HA_YEAR = {
-        "N": 44.00,
-        "P": 5.00,
-        "K": 54.00,
-        "Mg": 6.00,
+    # Budget-responsive elemental baseline profiles in kg/ha/year, from the standard yield target table (5–25 ton/ha).
+    NPK_BASELINE_PROFILES_KG_HA_YEAR = {
+        "5_ton_ha": {"N": 22.00, "P": 2.00, "K": 27.00, "Mg": 3.00},
+        "10_ton_ha": {"N": 44.00, "P": 5.00, "K": 54.00, "Mg": 6.00},
+        "15_ton_ha": {"N": 66.00, "P": 7.00, "K": 82.00, "Mg": 10.00},
+        "20_ton_ha": {"N": 90.00, "P": 10.00, "K": 111.00, "Mg": 13.00},
+        "25_ton_ha": {"N": 116.00, "P": 13.00, "K": 143.00, "Mg": 17.00},
     }
+    NPK_BASELINE_PROFILE = "10_ton_ha"  # Default target before budget-responsive tier selection.
+    NPK_BASELINE_FALLBACK_PROFILE = "5_ton_ha"  # Kept as the lowest-tier compatibility setting.
+    ENABLE_NPK_BASELINE_BUDGET_DOWNGRADE = True  # Enables selection across all listed yield target tiers.
+    # Tier selection and age-multiplier cap use the same configurable allowance margin.
+    NPK_BASELINE_DOWNGRADE_OVER_BUDGET_PERCENT = MAX_NPK_COST_OVER_BUDGET_PERCENT
+
+    if NPK_BASELINE_PROFILE not in NPK_BASELINE_PROFILES_KG_HA_YEAR:
+        raise ValueError(f"Unknown NPK baseline profile: {NPK_BASELINE_PROFILE!r}")
+
+    # Current project baseline. All comparisons below read this selected profile.
+    BASELINE_ELEMENTAL_KG_HA_YEAR = dict(NPK_BASELINE_PROFILES_KG_HA_YEAR[NPK_BASELINE_PROFILE])
     # Farm-wide annual target: scale every per-hectare baseline by the submitted farm area.
     # Keep the kg/ha baseline above unchanged for per-hectare comparisons.
     BASELINE_ELEMENTAL_KG_FARM_YEAR = {
@@ -3622,7 +3728,7 @@ def run_v2_scan(
     for oxide_data in OXIDE_TO_ELEMENT.values():
         oxide_data["factor"] = oxide_data["element_mass_g_mol"] / oxide_data["oxide_mass_g_mol"]
 
-    # %% Notebook code cell 48
+    # %% Notebook code cell 51
     def parse_analysis(label):
         """Read N-P2O5-K2O[-MgO] percentages from a string such as '12-6-22-3'."""
         try:
@@ -3745,7 +3851,8 @@ def run_v2_scan(
             })
         return {"elemental_supply_kg_ha_year": totals, "products": breakdown, "ignored_products": ignored}
 
-    # %% Notebook code cell 50
+
+    # %% Notebook code cell 53
     def print_standalone_n_recommendation(elemental_year):
         """Show separate ZA/urea options for the elemental N shortfall."""
         n_target = BASELINE_ELEMENTAL_KG_HA_YEAR["N"]
@@ -3920,7 +4027,7 @@ def run_v2_scan(
             print(f"    Exact farm bags = {npk_fmt(product_needed_farm)} kg ÷ {npk_fmt(bag_size)} kg/bag "
                   f"= {npk_fmt(exact_bags)}; buy {full_bags} full bag(s).")
 
-    # %% Notebook code cell 52
+    # %% Notebook code cell 55
 
 
     def _selected_zone_boost_cost_for_budget():
@@ -4991,7 +5098,239 @@ def run_v2_scan(
               "Confirm rates and baseline with an agronomist using field data; "
               "this script is not an agronomic diagnosis.")
 
-    # %% Notebook code cell 54
+    # Estimate each profile after its per-blend age-multiplier budget cap. Only downgrade
+    # if the cheapest capped estimate for the active profile plus zone Mg/Urea still exceeds the allowance.
+    def _estimate_profile_purchases(profile_name):
+        """Estimate budget-capped, whole-bag costs for every priced blend at this baseline."""
+        _profile = NPK_BASELINE_PROFILES_KG_HA_YEAR[profile_name]
+        _area = float(USER_FARM_AREA_HA)
+        _age_factor = NPK_BASELINE_BUDGET_DECISION["age_multiplier_for_estimate"]
+        _candidate_labels = [("Current blend", parse_analysis(USER_FERTILIZER_ANALYSIS))]
+        for _name, _label in ALTERNATIVE_NPK_PRODUCTS.items():
+            _parsed = parse_analysis(_label)
+            _key = tuple(_parsed[k] for k in ("N", "P2O5", "K2O", "MgO"))
+            if not any(tuple(_existing[k] for k in ("N", "P2O5", "K2O", "MgO")) == _key
+                       for _, _existing in _candidate_labels):
+                _candidate_labels.append((_name, _parsed))
+
+        _estimates = []
+        for _name, _label in _candidate_labels:
+            _price = npk_label_price_per_bag_rp(_label)
+            if _price is None or float(_price) <= 0:
+                continue
+            _one_bag, _, _ = build_annual_nutrients(_label, 1.0)
+            if any(float(_one_bag.get(_nutrient, 0.0)) <= 0 for _nutrient in ("N", "P", "K")):
+                continue
+            _bags_by_nutrient = {
+                _nutrient: float(_profile[_nutrient]) / float(_one_bag[_nutrient])
+                for _nutrient in ("N", "P", "K")
+            }
+            _limiting_nutrient = max(_bags_by_nutrient, key=_bags_by_nutrient.get)
+            _exact_bags_per_ha = _bags_by_nutrient[_limiting_nutrient]
+            _budget_cap = _budget_cap_age_multiplier(
+                _age_factor, _exact_bags_per_ha, float(_price)
+            )
+            _applied_age_multiplier = float(_budget_cap["applied_multiplier"])
+            _exact_farm_bags = _exact_bags_per_ha * _applied_age_multiplier * _area
+            _full_farm_bags = int(math.ceil(_exact_farm_bags - 1e-12))
+            _npk_cost = _full_farm_bags * float(_price)
+            _estimates.append({
+                "blend_option": _name,
+                "label_percent_n_p2o5_k2o_mgo": {k: float(v) for k, v in _label.items()},
+                "elemental_kg_per_bag": {k: float(v) for k, v in _one_bag.items()},
+                "bags_required_per_ha_by_nutrient": _bags_by_nutrient,
+                "limiting_nutrient": _limiting_nutrient,
+                "baseline_exact_bags_per_ha_year": _exact_bags_per_ha,
+                "configured_age_multiplier": _age_factor,
+                "age_multiplier": _applied_age_multiplier,
+                "age_multiplier_enabled": bool(ENABLE_NPK_AGE_MULTIPLIER),
+                "age_budget_cap": _budget_cap,
+                "exact_age_adjusted_bags_farm_year": _exact_farm_bags,
+                "full_bags_farm_year": _full_farm_bags,
+                "bag_price_rp": float(_price),
+                "npk_cost_rp": _npk_cost,
+                "zone_mg_urea_cost_rp": float(NPK_BASELINE_BUDGET_DECISION["zone_mg_urea_cost_rp"]),
+                "combined_cost_rp": _npk_cost + float(NPK_BASELINE_BUDGET_DECISION["zone_mg_urea_cost_rp"]),
+            })
+        return sorted(_estimates, key=lambda _item: (_item["combined_cost_rp"], _item["blend_option"]))
+
+
+    def _estimate_cheapest_profile_purchase(profile_name):
+        _options = _estimate_profile_purchases(profile_name)
+        return _options[0] if _options else None
+
+
+    # Determine the Commonize multiplier, then evaluate every yield target tier using
+    # the farmer's current blend as the anchor. The tier's age multiplier is budget-capped first.
+    _npk_budget_age_years = None
+    _npk_budget_age_factor = None
+    if not ENABLE_NPK_AGE_MULTIPLIER:
+        _npk_budget_age_factor = 1.0
+    elif UI_FARM_INPUT.get("year") is not None:
+        _npk_budget_age_years = NPK_AGE_REFERENCE_DATE.year - int(UI_FARM_INPUT["year"])
+        _planting_month = UI_FARM_INPUT.get("plantingMonth")
+        if _planting_month is not None and NPK_AGE_REFERENCE_DATE.month < int(_planting_month):
+            _npk_budget_age_years -= 1
+        for (_age_min, _age_max), _age_multiplier in NPK_AGE_COMMONIZE_MULTIPLIERS.items():
+            if _npk_budget_age_years >= _age_min and (_age_max is None or _npk_budget_age_years <= _age_max):
+                _npk_budget_age_factor = float(_age_multiplier)
+                break
+
+    _npk_zone_cost_for_tier = _selected_zone_boost_cost_for_budget()
+    _npk_farm_budget_for_tier = FERTILIZER_BUDGET_RP
+    _npk_margin_percent_for_tier = float(NPK_BASELINE_DOWNGRADE_OVER_BUDGET_PERCENT)
+    _npk_allowed_spend_for_tier = (
+        float(_npk_farm_budget_for_tier) * (1.0 + _npk_margin_percent_for_tier / 100.0)
+        if _npk_farm_budget_for_tier is not None else None
+    )
+    _npk_profile_order = sorted(
+        NPK_BASELINE_PROFILES_KG_HA_YEAR,
+        key=lambda _profile: float(NPK_BASELINE_PROFILES_KG_HA_YEAR[_profile]["Mg"]),
+    )
+    _npk_starting_profile = NPK_BASELINE_PROFILE
+    if _npk_starting_profile not in NPK_BASELINE_PROFILES_KG_HA_YEAR:
+        raise ValueError(f"Unknown NPK baseline profile: {_npk_starting_profile!r}")
+
+    NPK_BASELINE_BUDGET_DECISION = {
+        "enabled": bool(ENABLE_NPK_BASELINE_BUDGET_DOWNGRADE),
+        "selection_mode": "highest oil-palm yield target tier (ton/ha) whose current-blend anchor estimate fits the allowance",
+        "original_profile": _npk_starting_profile,
+        "fallback_profile": NPK_BASELINE_FALLBACK_PROFILE,
+        "selected_profile": _npk_starting_profile,
+        "budget_rp_per_ha": FERTILIZER_BUDGET_RP_PER_HA,
+        "farm_area_ha": FERTILIZER_BUDGET_AREA_HA,
+        "whole_farm_budget_rp": _npk_farm_budget_for_tier,
+        "over_budget_margin_percent": _npk_margin_percent_for_tier,
+        "allowed_spend_rp": _npk_allowed_spend_for_tier,
+        "zone_mg_urea_cost_rp": _npk_zone_cost_for_tier,
+        "anchor_blend_option": "Current blend",
+        "age_multiplier_for_estimate": _npk_budget_age_factor,
+        "original_profile_estimate": None,
+        "original_profile_options": [],
+        "selected_profile_estimate": None,
+        "selected_profile_options": [],
+        "fallback_profile_estimate": None,
+        "fallback_profile_options": [],
+        "tier_evaluations": [],
+        "downgrade_applied": False,
+        "upgrade_applied": False,
+        "target_adjustment_applied": False,
+        "lowest_tier_still_over_budget": False,
+        "status": "not evaluated",
+        "trigger_formula": "whole-farm budget × (1 + over-budget margin/100)",
+        "estimate_formula": "current-blend age-capped whole-farm full-bag NPK cost + selected zone Mg/Urea whole-bag cost",
+    }
+
+    # Calculate the current-blend anchor estimate for each tier. Other blends are retained
+    # as comparison options, but they do not trigger or determine target-tier selection.
+    _npk_options_by_profile = {}
+    if _npk_budget_age_factor is not None and _npk_zone_cost_for_tier is not None:
+        for _profile_name in _npk_profile_order:
+            _profile_options = _estimate_profile_purchases(_profile_name)
+            _npk_options_by_profile[_profile_name] = _profile_options
+            _anchor_estimate = next(
+                (_item for _item in _profile_options if _item.get("blend_option") == "Current blend"),
+                None,
+            )
+            _targets = NPK_BASELINE_PROFILES_KG_HA_YEAR[_profile_name]
+            _fits = (
+                bool(_anchor_estimate is not None and _npk_allowed_spend_for_tier is not None
+                     and float(_anchor_estimate["combined_cost_rp"]) <= float(_npk_allowed_spend_for_tier))
+            )
+            NPK_BASELINE_BUDGET_DECISION["tier_evaluations"].append({
+                "profile": _profile_name,
+                "yield_target_ton_ha": float(_profile_name.split("_")[0]),
+                "baseline_elemental_kg_ha_year": {k: float(v) for k, v in _targets.items()},
+                "anchor_blend_option": "Current blend",
+                "configured_age_multiplier": _npk_budget_age_factor,
+                "applied_age_multiplier": _anchor_estimate.get("age_multiplier") if _anchor_estimate else None,
+                "current_blend_label_percent": _anchor_estimate.get("label_percent_n_p2o5_k2o_mgo") if _anchor_estimate else None,
+                "elemental_kg_per_50kg_bag": _anchor_estimate.get("elemental_kg_per_bag") if _anchor_estimate else None,
+                "bags_required_per_ha_by_nutrient": _anchor_estimate.get("bags_required_per_ha_by_nutrient") if _anchor_estimate else None,
+                "limiting_nutrient": _anchor_estimate.get("limiting_nutrient") if _anchor_estimate else None,
+                "baseline_exact_bags_per_ha_year": _anchor_estimate.get("baseline_exact_bags_per_ha_year") if _anchor_estimate else None,
+                "age_adjusted_exact_bags_farm_year": _anchor_estimate.get("exact_age_adjusted_bags_farm_year") if _anchor_estimate else None,
+                "age_adjusted_full_bags_farm_year": _anchor_estimate.get("full_bags_farm_year") if _anchor_estimate else None,
+                "bag_price_rp": _anchor_estimate.get("bag_price_rp") if _anchor_estimate else npk_label_price_per_bag_rp(parse_analysis(USER_FERTILIZER_ANALYSIS)),
+                "npk_cost_rp": _anchor_estimate.get("npk_cost_rp") if _anchor_estimate else None,
+                "npk_cost_formula": (
+                    f"{_anchor_estimate.get('full_bags_farm_year')} × Rp{float(_anchor_estimate.get('bag_price_rp')):,.0f}/bag = "
+                    f"Rp{float(_anchor_estimate.get('npk_cost_rp')):,.0f}"
+                    if _anchor_estimate else None
+                ),
+                "zone_mg_urea_cost_rp": _npk_zone_cost_for_tier,
+                "combined_cost_rp": _anchor_estimate.get("combined_cost_rp") if _anchor_estimate else None,
+                "combined_cost_formula": (
+                    f"Rp{float(_anchor_estimate.get('npk_cost_rp')):,.0f} + "
+                    f"Rp{float(_npk_zone_cost_for_tier):,.0f} = Rp{float(_anchor_estimate.get('combined_cost_rp')):,.0f}"
+                    if _anchor_estimate else None
+                ),
+                "allowed_spend_rp": _npk_allowed_spend_for_tier,
+                "fits_allowance": _fits,
+                "status": ("fits allowance" if _fits else
+                           "current blend estimate unavailable" if _anchor_estimate is None else
+                           "over allowance"),
+            })
+
+    if not ENABLE_NPK_BASELINE_BUDGET_DOWNGRADE:
+        NPK_BASELINE_BUDGET_DECISION["status"] = "budget-responsive target selection disabled; configured profile retained"
+    elif _npk_farm_budget_for_tier is None:
+        NPK_BASELINE_BUDGET_DECISION["status"] = "no fertilizer budget entered; configured profile retained"
+    elif _npk_zone_cost_for_tier is None:
+        NPK_BASELINE_BUDGET_DECISION["status"] = "zone Mg/Urea cost unavailable; configured profile retained"
+    elif _npk_budget_age_factor is None:
+        NPK_BASELINE_BUDGET_DECISION["status"] = "age multiplier unavailable; configured profile retained"
+    else:
+        _evaluated_tiers = NPK_BASELINE_BUDGET_DECISION["tier_evaluations"]
+        _affordable_tiers = [row for row in _evaluated_tiers if row["fits_allowance"]]
+        if _affordable_tiers:
+            _selected_tier_row = max(_affordable_tiers, key=lambda row: row["yield_target_ton_ha"])
+            _selected_profile = _selected_tier_row["profile"]
+            NPK_BASELINE_BUDGET_DECISION["status"] = (
+                "selected the highest oil-palm yield target tier whose current-blend estimate fits the allowance"
+            )
+        else:
+            _selected_profile = _npk_profile_order[0]
+            NPK_BASELINE_BUDGET_DECISION["lowest_tier_still_over_budget"] = True
+            NPK_BASELINE_BUDGET_DECISION["status"] = (
+                "even the lowest yield target tier exceeds the allowance for the current blend; lowest tier retained"
+            )
+        NPK_BASELINE_PROFILE = _selected_profile
+        NPK_BASELINE_BUDGET_DECISION["selected_profile"] = _selected_profile
+        NPK_BASELINE_BUDGET_DECISION["selected_profile_options"] = _npk_options_by_profile.get(_selected_profile, [])
+        NPK_BASELINE_BUDGET_DECISION["selected_profile_estimate"] = next(
+            (_item for _item in NPK_BASELINE_BUDGET_DECISION["selected_profile_options"]
+             if _item.get("blend_option") == "Current blend"), None
+        )
+        NPK_BASELINE_BUDGET_DECISION["original_profile_options"] = _npk_options_by_profile.get(_npk_starting_profile, [])
+        NPK_BASELINE_BUDGET_DECISION["original_profile_estimate"] = next(
+            (_item for _item in NPK_BASELINE_BUDGET_DECISION["original_profile_options"]
+             if _item.get("blend_option") == "Current blend"), None
+        )
+        NPK_BASELINE_BUDGET_DECISION["target_adjustment_applied"] = _selected_profile != _npk_starting_profile
+        _start_mg = float(NPK_BASELINE_PROFILES_KG_HA_YEAR[_npk_starting_profile]["Mg"])
+        _selected_mg = float(NPK_BASELINE_PROFILES_KG_HA_YEAR[_selected_profile]["Mg"])
+        NPK_BASELINE_BUDGET_DECISION["downgrade_applied"] = _selected_mg < _start_mg
+        NPK_BASELINE_BUDGET_DECISION["upgrade_applied"] = _selected_mg > _start_mg
+        if NPK_BASELINE_BUDGET_DECISION["target_adjustment_applied"]:
+            NPK_BASELINE_BUDGET_DECISION["fallback_profile"] = _selected_profile
+            NPK_BASELINE_BUDGET_DECISION["fallback_profile_options"] = NPK_BASELINE_BUDGET_DECISION["selected_profile_options"]
+            NPK_BASELINE_BUDGET_DECISION["fallback_profile_estimate"] = NPK_BASELINE_BUDGET_DECISION["selected_profile_estimate"]
+
+    if NPK_BASELINE_PROFILE == _npk_starting_profile and not NPK_BASELINE_BUDGET_DECISION["selected_profile_options"]:
+        # Keep the configured tier's calculations available when no selection could be made.
+        NPK_BASELINE_BUDGET_DECISION["selected_profile_options"] = _npk_options_by_profile.get(_npk_starting_profile, [])
+        NPK_BASELINE_BUDGET_DECISION["selected_profile_estimate"] = NPK_BASELINE_BUDGET_DECISION["original_profile_estimate"]
+
+    # Apply the selected profile before the annual NPK comparison and recap run.
+    BASELINE_ELEMENTAL_KG_HA_YEAR = dict(NPK_BASELINE_PROFILES_KG_HA_YEAR[NPK_BASELINE_PROFILE])
+    BASELINE_ELEMENTAL_KG_FARM_YEAR = {
+        _nutrient: float(_rate) * float(USER_FARM_AREA_HA)
+        for _nutrient, _rate in BASELINE_ELEMENTAL_KG_HA_YEAR.items()
+    }
+    NPK_BASELINE_BUDGET_DECISION["selected_profile"] = NPK_BASELINE_PROFILE
+
+    # %% Notebook code cell 57
     analysis = parse_analysis(USER_FERTILIZER_ANALYSIS)
     report_buffer = _NPKStringIO()
     with _npk_redirect_stdout(report_buffer):
@@ -5014,6 +5353,24 @@ def run_v2_scan(
     combined_result["combined_fertilizer_calculations"] = {
         "field_wide_npk_baseline_comparison": build_field_npk_json_record(analysis),
         "zone_vari_boost_calculations": build_zone_boost_json_records(combined_result.get("zones", [])),
+        "budget_responsive_npk_baseline_selection": {
+            "enabled": bool(NPK_BASELINE_BUDGET_DECISION.get("enabled")),
+            "selection_mode": NPK_BASELINE_BUDGET_DECISION.get("selection_mode"),
+            "anchor_blend_option": NPK_BASELINE_BUDGET_DECISION.get("anchor_blend_option"),
+            "starting_profile": NPK_BASELINE_BUDGET_DECISION.get("original_profile"),
+            "selected_profile": NPK_BASELINE_BUDGET_DECISION.get("selected_profile"),
+            "selected_baseline_elemental_kg_ha_year": dict(BASELINE_ELEMENTAL_KG_HA_YEAR),
+            "budget_rp_per_ha": NPK_BASELINE_BUDGET_DECISION.get("budget_rp_per_ha"),
+            "farm_area_ha": NPK_BASELINE_BUDGET_DECISION.get("farm_area_ha"),
+            "whole_farm_budget_rp": NPK_BASELINE_BUDGET_DECISION.get("whole_farm_budget_rp"),
+            "over_budget_margin_percent": NPK_BASELINE_BUDGET_DECISION.get("over_budget_margin_percent"),
+            "allowed_spend_rp": NPK_BASELINE_BUDGET_DECISION.get("allowed_spend_rp"),
+            "zone_mg_urea_cost_rp": NPK_BASELINE_BUDGET_DECISION.get("zone_mg_urea_cost_rp"),
+            "status": NPK_BASELINE_BUDGET_DECISION.get("status"),
+            "lowest_tier_still_over_budget": bool(NPK_BASELINE_BUDGET_DECISION.get("lowest_tier_still_over_budget")),
+            "tier_evaluations": NPK_BASELINE_BUDGET_DECISION.get("tier_evaluations", []),
+            "formula": "For each oil-palm yield target tier (5, 10, 15, 20, or 25 ton/ha), use current blend elemental kg/bag to calculate baseline bags; apply the age multiplier subject to the budget cap; calculate full-bag NPK cost plus selected zone Mg/Urea cost; choose the highest Mg tier at or below the farm-wide allowance.",
+        },
         "scope_note": (
             "Field-wide standalone top-ups close the configured NPK baseline gap. Zone VARI boosts are separate "
             "additional zone calculations already derived from confidence, VARI, zone area, and configured Mg/N rates. "
@@ -5129,6 +5486,9 @@ def run_v2_scan(
             "limitingNutrient": _blend.get("limiting_nutrient"),
             "baselineExactBagsPerHaYear": _baseline_bags_ha,
             "ageMultiplier": _blend.get("age_multiplier"),
+            "configuredAgeMultiplier": _blend.get("configured_age_multiplier"),
+            "ageMultiplierEnabled": bool(_age_adjusted_npk_target.get("age_multiplier_enabled")),
+            "ageBudgetCap": _blend.get("age_budget_cap"),
             "ageAdjustedExactBagsPerHaYear": _adjusted_bags_ha,
             "ageAdjustedFullBagsPerHaYear": _blend.get("age_adjusted_full_bags_per_ha_year"),
             "ageAdjustedExactBagsForFarmYear": _adjusted_bags_farm,
@@ -5245,7 +5605,7 @@ def run_v2_scan(
         json.dump(_fertilizer_summary, _summary_file, indent=2, ensure_ascii=False, allow_nan=False)
     print(f"Fertilizer history + VARI supplement summary saved to: {Path(OUTPUT_FERTILIZER_HISTORY_JSON).resolve()}")
 
-    # %% Notebook code cell 56
+    # %% Notebook code cell 59
     # Real commercial NPKMg formulation and 50 kg bag, linked in the note above.
     EXAMPLE_PRODUCT = "PUSRI NPK 13-6-27-4+0.65B"
     EXAMPLE_LABEL = "13-6-27-4"  # N-P2O5-K2O-MgO label percentages; B is not part of this NPKMg comparison.
@@ -5303,7 +5663,7 @@ def run_v2_scan(
     print("The NPK-versus-baseline comparison does not override product-label or field-specific application directions.")
     print("If Part 1 recommends a positive zone boost, use its zone-level amounts separately/in coordination with these field-wide single-nutrient top-ups.")
 
-    # %% Notebook code cell 58
+    # %% Notebook code cell 61
     # Compact recap of the input, zone-level product quantities, and NPK budget fit.
     import html as _overview_html
     import math as _overview_math
@@ -5321,8 +5681,17 @@ def run_v2_scan(
     def _overview_rp(value):
         return "N/A" if value is None else f"Rp{float(value):,.0f}"
 
-    def _overview_table(title, headers, rows):
-        html = [f"<h3>{_overview_html.escape(title)}</h3>", "<table style='border-collapse:collapse;width:100%;margin:8px 0 20px'>"]
+    _overview_detail_sections = []
+
+    def _overview_table(title, headers, rows, details=False):
+        if details:
+            html = [
+                f"<h4 style='margin:18px 0 6px'>{_overview_html.escape(title)}</h4>",
+                "<div style='overflow-x:auto'>",
+                "<table style='border-collapse:collapse;width:100%;margin:6px 0 14px'>",
+            ]
+        else:
+            html = [f"<h3>{_overview_html.escape(title)}</h3>", "<div style='overflow-x:auto'><table style='border-collapse:collapse;width:100%;margin:8px 0 20px'>"]
         html.append("<thead><tr>" + "".join(
             f"<th style='text-align:left;padding:7px;border-bottom:2px solid #999;background:#eef2f5'>{_overview_html.escape(str(h))}</th>"
             for h in headers
@@ -5332,8 +5701,11 @@ def run_v2_scan(
                 f"<td style='padding:7px;border-bottom:1px solid #ddd;vertical-align:top'>{_overview_html.escape(str(value))}</td>"
                 for value in row
             ) + "</tr>")
-        html.append("</tbody></table>")
-        _overview_display(_OverviewHTML("".join(html)))
+        html.append("</tbody></table></div>")
+        if details:
+            _overview_detail_sections.append("".join(html))
+        else:
+            _overview_display(_OverviewHTML("".join(html)))
 
     # 1) Present every submitted field as readable category / field / value rows.
     _overview_input_rows = []
@@ -5363,14 +5735,18 @@ def run_v2_scan(
     _overview_flatten("Budget", "User-entered annual budget (Rp/ha)", FERTILIZER_BUDGET_RP_PER_HA)
     _overview_flatten("Budget", "Farm area used for budget scaling (ha)", FERTILIZER_BUDGET_AREA_HA)
     _overview_flatten("Budget", "Calculated whole-farm annual budget (Rp)", FERTILIZER_BUDGET_RP)
-    _overview_table("1. User-submitted farm and fertilizer data", ["Category", "Field", "Value"], _overview_input_rows)
+    _overview_table("Submitted farm and fertilizer details", ["Category", "Field", "Value"], _overview_input_rows, details=True)
 
-    # 2) Display the annual base + VARI product quantity per zone for Dolomite and Urea.
+    # 2) Show raw annual base + VARI product need per zone, then pooled whole-field purchases.
     _overview_tree_counts = {f"Z{int(z['zone_id'])}": int(z.get("tree_count", 0)) for z in zone_json}
-    _overview_zone_rows = []
     _overview_zone_product_keys = {
         "dolomite_Mg_cheaper": "Dolomite",
         "urea_N_expensive": "Urea",
+    }
+    _overview_zone_rows = []
+    _overview_field_purchase_rows = {
+        row.get("product"): row for row in product_bag_rows
+        if row.get("zone_id") == "FIELD TOTAL"
     }
     for _row in product_bag_rows:
         _key = _row.get("product")
@@ -5378,24 +5754,43 @@ def run_v2_scan(
         if _key not in _overview_zone_product_keys or _zone_id == "FIELD TOTAL":
             continue
         _total_kg = _row.get("base_plus_supplement_product_kg_per_zone_per_year")
+        _per_palm_kg = _row.get("base_plus_supplement_product_kg_per_palm_per_year")
         _bag_kg = _row.get("bag_size_kg")
-        _exact_bags = _row.get("exact_bag_equivalent_for_zone")
-        _zone_buy_bags = (
-            int(_overview_math.ceil(float(_exact_bags) - 1e-12))
-            if _exact_bags is not None and float(_exact_bags) > 0 else 0 if _exact_bags is not None else None
-        )
         _overview_zone_rows.append([
             str(_zone_id), _overview_zone_product_keys[_key], str(_overview_tree_counts.get(str(_zone_id), "—")),
             "N/A" if _total_kg is None else f"{float(_total_kg):,.{_overview_decimals}f}",
-            "N/A" if _exact_bags is None else f"{float(_exact_bags):,.{_overview_decimals}f}",
-            "N/A" if _zone_buy_bags is None else str(_zone_buy_bags),
+            "N/A" if _per_palm_kg is None else f"{float(_per_palm_kg):,.{_overview_decimals}f}",
+            f"{float(_bag_kg):,.{_overview_decimals}f}" if _bag_kg is not None else "N/A",
+            "—", "—",
+        ])
+
+    # Add one pooled purchase row per product. Raw demand remains kg; whole bags are
+    # only used to show how much a farmer must buy and how many kg those bags supply.
+    for _key, _product_name in _overview_zone_product_keys.items():
+        _field_purchase = _overview_field_purchase_rows.get(_key)
+        if _field_purchase is None:
+            continue
+        _raw_field_kg = _field_purchase.get("field_total_product_kg_per_year")
+        _bag_kg = _field_purchase.get("bag_size_kg")
+        _full_bags = _field_purchase.get("full_bags_to_buy_for_field")
+        _purchase_kg = _field_purchase.get("purchase_quantity_kg_for_field")
+        if _purchase_kg is None and _full_bags is not None and _bag_kg is not None:
+            _purchase_kg = int(_full_bags) * float(_bag_kg)
+        _overview_zone_rows.append([
+            "FIELD TOTAL", _product_name, str(sum(_overview_tree_counts.values())),
+            "N/A" if _raw_field_kg is None else f"{float(_raw_field_kg):,.{_overview_decimals}f}",
+            "—", f"{float(_bag_kg):,.{_overview_decimals}f}" if _bag_kg is not None else "N/A",
+            "N/A" if _full_bags is None else str(_full_bags),
+            "N/A" if _purchase_kg is None else f"{float(_purchase_kg):,.{_overview_decimals}f}",
         ])
     _overview_table(
-        "2. Annual zone fertilizer quantities (base + VARI supplement)",
-        ["Zone", "Product", "Detected trees", "Total kg/zone/year", "Bag equivalents", "Full bags if purchased per zone"],
-        _overview_zone_rows or [["—", "No zone product rows available", "—", "—", "—", "—"]],
+        "2. Annual zone fertilizer need and field purchase (base + VARI supplement)",
+        ["Zone", "Product", "Detected trees", "Raw need kg/zone/year", "Raw need kg/palm/year",
+         "Bag size kg", "Full bags to buy (field)", "Purchased kg (field)"],
+        _overview_zone_rows or [["—", "No zone product rows available", "—", "—", "—", "—", "—", "—"]],
+        details=True,
     )
-    print("Per-zone full bags are rounded independently for planning; actual field purchasing can differ if product is pooled across zones.")
+    print("Zone demand is shown as raw kg; full-bag purchases are rounded after pooling field demand.")
 
     # Whole-field cost for the selected Mg option plus Urea, using whole-bag estimates.
     _overview_selected_zone_product_keys = {_selected_mg_product, "urea_N_expensive"}
@@ -5455,6 +5850,9 @@ def run_v2_scan(
         _overview_candidate_rows.append([
             str(_option.get("blendOption")),
             "-".join(str(_option.get("composition", {}).get(k, 0)) for k in ("N", "P2O5", "K2O", "MgO")),
+            (f"{float(_option.get('configuredAgeMultiplier')):.2f}× → {float(_option.get('ageMultiplier')):.2f}× applied"
+             if _option.get("ageMultiplierEnabled") and _option.get("configuredAgeMultiplier") is not None
+             else f"{float(_option.get('ageMultiplier') or 1.0):.2f}× applied (age mode off)"),
             "N/A" if _option.get("ageAdjustedFullBagsForFarmYear") is None else str(_option.get("ageAdjustedFullBagsForFarmYear")),
             _overview_rp(_npk_cost),
             _overview_rp(_zone_cost),
@@ -5476,15 +5874,326 @@ def run_v2_scan(
         else:
             _display_row[-1] = ""
 
-    overview_headers = ["Blend option", "Label N-P₂O₅-K₂O-MgO (%)", "NPK full bags/farm/year", "NPK cost", "Zone Mg/Urea cost", "Combined estimate", "Farm budget target (Rp)", "Budget difference", "Budget fit"]
-    if _overview_npk_options:
+    # The farmer's current product is the anchor row; alternatives follow it.
+    # Show the selected tier's blend options once; the tier-by-tier anchor decision is in collapsed detail.
+    _baseline_decision = NPK_BASELINE_BUDGET_DECISION
+    _original_profile_name = _baseline_decision.get("original_profile")
+    _selected_profile_name = _baseline_decision.get("selected_profile")
+    _original_targets_for_summary = NPK_BASELINE_PROFILES_KG_HA_YEAR.get(_original_profile_name, {})
+    _selected_targets_for_summary = NPK_BASELINE_PROFILES_KG_HA_YEAR.get(_selected_profile_name, {})
+    _summary_budget = _baseline_decision.get("whole_farm_budget_rp")
+    _summary_allowance = _baseline_decision.get("allowed_spend_rp")
+    _summary_zone_cost = _baseline_decision.get("zone_mg_urea_cost_rp")
+
+
+    def _profile_option_rows(_options, _allowance, _profile_name):
+        _rows = []
+        _profile_targets = NPK_BASELINE_PROFILES_KG_HA_YEAR[_profile_name]
+        _closest = min(
+            _options,
+            key=lambda _item: abs(float(_item["combined_cost_rp"]) - float(_allowance)),
+        ) if _options and _allowance is not None else None
+        # The submitted product is the anchor row; budget fit is still ranked independently.
+        _display_options = sorted(
+            _options,
+            key=lambda _item: (0 if _item.get("blend_option") == "Current blend" else 1,
+                               _item.get("blend_option", "")),
+        )
+        for _option in _display_options:
+            _delta = (float(_option["combined_cost_rp"]) - float(_allowance)
+                      if _allowance is not None else None)
+            _bags_by_nutrient_formula = "; ".join(
+                f"{_nutrient}: {_profile_targets[_nutrient]:g} ÷ "
+                f"{_option['elemental_kg_per_bag'][_nutrient]:,.{_overview_decimals}f} = "
+                f"{_option['bags_required_per_ha_by_nutrient'][_nutrient]:,.{_overview_decimals}f}"
+                for _nutrient in ("N", "P", "K")
+            )
+            _npk_cost_formula = (
+                f"{_option['full_bags_farm_year']} × {_overview_rp(_option['bag_price_rp'])} "
+                f"= {_overview_rp(_option['npk_cost_rp'])}"
+            )
+            _combined_formula = (
+                f"{_overview_rp(_option['npk_cost_rp'])} + "
+                f"{_overview_rp(_option['zone_mg_urea_cost_rp'])} = "
+                f"{_overview_rp(_option['combined_cost_rp'])}"
+            )
+            _rows.append([
+                ("Current blend (anchor)" if _option.get("blend_option") == "Current blend"
+                 else _option["blend_option"]),
+                "-".join(f"{_option['label_percent_n_p2o5_k2o_mgo'][k]:g}" for k in ("N", "P2O5", "K2O", "MgO")),
+                (f"{_option.get('configured_age_multiplier', _option['age_multiplier']):.2f}× → "
+                 f"{_option['age_multiplier']:.{_overview_decimals}f}× after cap"
+                 if _option.get("age_multiplier_enabled")
+                 else "1.00× (age mode off)"),
+                _bags_by_nutrient_formula,
+                _option["limiting_nutrient"],
+                f"{_option['baseline_exact_bags_per_ha_year']:,.{_overview_decimals}f} × "
+                f"{_option['age_multiplier']:.{_overview_decimals}f} × {USER_FARM_AREA_HA:,.{_overview_decimals}f} ha "
+                f"= {_option['exact_age_adjusted_bags_farm_year']:,.{_overview_decimals}f}",
+                f"ceil = {_option['full_bags_farm_year']}",
+                _npk_cost_formula,
+                _overview_rp(_option["zone_mg_urea_cost_rp"]),
+                _combined_formula,
+                _overview_rp(_allowance),
+                ("N/A" if _delta is None else
+                 f"{_overview_rp(abs(_delta))} {'over' if _delta > 0 else 'under' if _delta < 0 else 'within'}"),
+                "CLOSEST TO BUDGET" if _option is _closest else "",
+            ])
+        return _rows
+
+    _selected_profile_options = _baseline_decision.get("selected_profile_options") or []
+    _selected_profile_display = _selected_profile_name.replace("_ton_ha", " ton/ha yield")
+    _selected_profile_label = ", ".join(
+        f"{_nutrient} {_selected_targets_for_summary[_nutrient]:g}"
+        for _nutrient in ("N", "P", "K", "Mg")
+    ) + " kg/ha/year"
+    _tier_decision_rows = []
+    for _tier in _baseline_decision.get("tier_evaluations", []):
+        _targets = _tier.get("baseline_elemental_kg_ha_year", {})
+        _elemental_bag = _tier.get("elemental_kg_per_50kg_bag") or {}
+        _bags_needed = _tier.get("bags_required_per_ha_by_nutrient") or {}
+        _baseline_exact = _tier.get("baseline_exact_bags_per_ha_year")
+        _applied_factor = _tier.get("applied_age_multiplier")
+        _exact_farm = _tier.get("age_adjusted_exact_bags_farm_year")
+        _full_bags = _tier.get("age_adjusted_full_bags_farm_year")
+        _combined = _tier.get("combined_cost_rp")
+        _allowance = _tier.get("allowed_spend_rp")
+        _gap = float(_combined) - float(_allowance) if _combined is not None and _allowance is not None else None
+        _is_selected = _tier.get("profile") == _selected_profile_name
+        _bags_by_nutrient = "; ".join(
+            f"{nutrient}: {float(_targets[nutrient]):g} ÷ {float(_elemental_bag[nutrient]):.{_overview_decimals}f} kg/bag = "
+            f"{float(_bags_needed[nutrient]):.{_overview_decimals}f} bags/ha"
+            for nutrient in ("N", "P", "K")
+        ) if _elemental_bag and _bags_needed else "Unavailable"
+        _exact_farm_formula = (
+            f"{float(_baseline_exact):.{_overview_decimals}f} × {float(_applied_factor):.{_overview_decimals}f} × "
+            f"{float(USER_FARM_AREA_HA):.{_overview_decimals}f} ha = {float(_exact_farm):.{_overview_decimals}f} bags"
+            if _baseline_exact is not None and _applied_factor is not None and _exact_farm is not None else "Unavailable"
+        )
+        _full_bag_formula = f"ceil({_exact_farm:.{_overview_decimals}f}) = {_full_bags} bags" if _exact_farm is not None and _full_bags is not None else "Unavailable"
+        _yield_ton = float(_tier["yield_target_ton_ha"])
+        _decision = (
+            "SELECTED" if _is_selected else "Fits allowance" if _tier.get("fits_allowance")
+            else "Still over allowance" if _combined is not None else "Estimate unavailable"
+        )
+        if _gap is not None:
+            _decision += f" ({_overview_rp(abs(_gap))} " + ("over)" if _gap > 0 else "under)" if _gap < 0 else "within)")
+        _tier_decision_rows.append([
+            f"{_yield_ton:g} ton/ha yield target",
+            "N / P / K / Mg = " + " / ".join(f"{float(_targets[n]):g}" for n in ("N", "P", "K", "Mg")) + " kg/ha/year",
+            "N / P / K per 50 kg bag = " + " / ".join(f"{float(_elemental_bag[n]):.{_overview_decimals}f}" for n in ("N", "P", "K")) + " kg",
+            _bags_by_nutrient,
+            (f"{_tier.get('limiting_nutrient')}: {_baseline_exact:.{_overview_decimals}f} exact bags/ha/year"
+             if _baseline_exact is not None else "Unavailable"),
+            (f"{float(_tier.get('configured_age_multiplier', 1.0)):.2f}× configured → {float(_applied_factor):.2f}× after cap"
+             if _applied_factor is not None else "Unavailable"),
+            _exact_farm_formula,
+            _full_bag_formula,
+            _tier.get("npk_cost_formula") or "Unavailable",
+            _overview_rp(_tier.get("zone_mg_urea_cost_rp")),
+            _tier.get("combined_cost_formula") or "Unavailable",
+            _overview_rp(_allowance),
+            _decision,
+        ])
+    _anchor_npk_label = parse_analysis(USER_FERTILIZER_ANALYSIS)
+    _anchor_npk_label_display = "-".join(
+        f"{float(_anchor_npk_label.get(_key, 0.0)):g}"
+        for _key in ("N", "P2O5", "K2O", "MgO")
+    )
+    _anchor_npk_price = npk_label_price_per_bag_rp(_anchor_npk_label)
+    _anchor_npk_price_display = _overview_rp(_anchor_npk_price) if _anchor_npk_price is not None else "price not configured"
+    _overview_display(_OverviewHTML(
+        "<p style='padding:10px;background:#fff8df;border-left:4px solid #d5a400;border-radius:4px'>"
+        f"<b>NPK blend used for every yield-tier calculation:</b> Farmer's current blend, label "
+        f"N-P₂O₅-K₂O-MgO = {_overview_html.escape(_anchor_npk_label_display)}%, "
+        f"{float(BAG_SIZE_KG):g} kg/bag, price {_overview_html.escape(_anchor_npk_price_display)}/bag. "
+        "This table tests that current blend against each baseline; the alternative NPK products are not used here."
+        "</p>"
+    ))
+
+    if _tier_decision_rows:
         _overview_table(
-            "3. Annual NPK/NPKMg matching — closest option to entered budget",
-            overview_headers,
-            _overview_candidate_rows,
+            f"Budget target selection — detailed calculation using current NPK {_anchor_npk_label_display}",
+            ["Yield target", "Elemental baseline", "Current blend elemental supply per bag", "Bags required by N/P/K", "Limiting nutrient / baseline bags", "Age multiplier", "Exact farm bags", "Full bags", "NPK cost", "Zone Mg/Urea cost", "Combined cost", "Allowance", "Decision"],
+            _tier_decision_rows,
+            details=False,
         )
     else:
-        print("\n3. Annual NPK/NPKMg recap unavailable: age-adjusted blend quantities are unavailable.")
+        _overview_table(
+            "Budget target selection — detailed calculation for each yield baseline",
+            ["Status"], [[str(_baseline_decision.get("status", "Tier estimates unavailable"))]], details=False,
+        )
+
+    _overview_table(
+        f"Selected annual NPK baseline — {_selected_profile_display} ({_selected_profile_label}): blend options",
+        ["Blend", "Label", "Age multiplier: configured → after cap", "Exact bags/ha by N/P/K", "Limiter", "Exact farm-bag formula", "Full bags", "NPK cost formula", "Zone cost", "Combined formula", "Allowance", "Difference / fit", "Budget rank"],
+        _profile_option_rows(_selected_profile_options, _summary_allowance, _selected_profile_name)
+        or [["No priced blend estimates available"] + ["—"] * 12],
+    )
+
+    _selected_anchor = _baseline_decision.get("selected_profile_estimate") or {}
+    _selected_anchor_cost = _selected_anchor.get("combined_cost_rp")
+    _selected_anchor_difference = (
+        float(_selected_anchor_cost) - float(_summary_allowance)
+        if _selected_anchor_cost is not None and _summary_allowance is not None else None
+    )
+    if _baseline_decision.get("lowest_tier_still_over_budget"):
+        _decision_text = (
+            f"Even the lowest tier, {_selected_profile_display}, is over the allowance by "
+            f"{_overview_rp(abs(_selected_anchor_difference))}; it is shown as the minimum tier, not as affordable."
+            if _selected_anchor_difference is not None else str(_baseline_decision.get("status"))
+        )
+    elif _baseline_decision.get("target_adjustment_applied"):
+        _direction = "increased" if _baseline_decision.get("upgrade_applied") else "reduced"
+        _decision_text = (
+            f"Using the current blend as the anchor, the budget selection {_direction} the target from "
+            f"{_original_profile_name.replace('_ton_ha', ' ton/ha yield')} to {_selected_profile_display}, the highest tier whose capped full-bag "
+            "estimate fits the allowance."
+        )
+    else:
+        _decision_text = (
+            f"The current blend anchor selected {_selected_profile_display}, the highest target tier that fits the allowance."
+            if _baseline_decision.get("tier_evaluations") else str(_baseline_decision.get("status"))
+        )
+    _overview_display(_OverviewHTML(
+        "<p style='padding:10px;background:#f2f5f7;border-radius:6px'>"
+        "Tier selection uses the farmer's current blend as the anchor. For each tier, the age multiplier is capped first; "
+        "the resulting full-bag NPK cost plus zone Mg/Urea cost is checked against the farm-wide allowance.<br>"
+        f"<b>Budget decision:</b> {_overview_html.escape(_decision_text)}<br>"
+        f"Farm budget = {_overview_rp(FERTILIZER_BUDGET_RP_PER_HA)}/ha × "
+        f"{FERTILIZER_BUDGET_AREA_HA:,.{_overview_decimals}f} ha = {_overview_rp(_summary_budget)}; "
+        f"allowance = budget × (1 + {float(_baseline_decision.get('over_budget_margin_percent') or 0):g}% ÷ 100) "
+        f"= {_overview_rp(_summary_allowance)}."
+        "</p>"
+    ))
+
+    # Show the configured starting-tier calculation when the budget selects a different tier.
+    _original_recalculation = None
+    if _baseline_decision.get("target_adjustment_applied"):
+        _original_profile_name = _baseline_decision["original_profile"]
+        _original_targets = NPK_BASELINE_PROFILES_KG_HA_YEAR[_original_profile_name]
+        _original_estimate = _baseline_decision.get("original_profile_estimate") or {}
+        _original_blend_name = _original_estimate.get("blend_option")
+        if _original_blend_name == "Current blend":
+            _original_label = parse_analysis(USER_FERTILIZER_ANALYSIS)
+        else:
+            _original_label = parse_analysis(ALTERNATIVE_NPK_PRODUCTS[_original_blend_name])
+        _original_per_bag, _, _ = build_annual_nutrients(_original_label, 1.0)
+        _original_bags_by_nutrient = {
+            _nutrient: float(_original_targets[_nutrient]) / float(_original_per_bag[_nutrient])
+            for _nutrient in ("N", "P", "K")
+        }
+        _original_limiting_nutrient = max(_original_bags_by_nutrient, key=_original_bags_by_nutrient.get)
+        _original_exact_bags_ha = max(_original_bags_by_nutrient.values())
+        _original_age_multiplier = float(_original_estimate["age_multiplier"])
+        _original_area_ha = float(USER_FARM_AREA_HA)
+        _original_exact_farm_bags = _original_exact_bags_ha * _original_age_multiplier * _original_area_ha
+        _original_full_farm_bags = int(_overview_math.ceil(_original_exact_farm_bags - 1e-12))
+        _original_npk_cost = _original_full_farm_bags * float(_original_estimate["bag_price_rp"])
+        _original_zone_cost = float(_baseline_decision["zone_mg_urea_cost_rp"])
+        _original_combined_cost = _original_npk_cost + _original_zone_cost
+        _original_allowance = float(_baseline_decision["allowed_spend_rp"])
+        _original_difference = _original_combined_cost - _original_allowance
+        _original_recalculation = {
+            "profile": _original_profile_name,
+            "baseline_elemental_kg_ha_year": {n: float(_original_targets[n]) for n in ("N", "P", "K", "Mg")},
+            "blend_option": _original_blend_name,
+            "label_percent_n_p2o5_k2o_mgo": {k: float(v) for k, v in _original_label.items()},
+            "elemental_kg_per_bag": {n: float(_original_per_bag[n]) for n in ("N", "P", "K", "Mg")},
+            "bags_per_ha_required_by_nutrient": _original_bags_by_nutrient,
+            "limiting_nutrient": _original_limiting_nutrient,
+            "baseline_exact_bags_per_ha_year": _original_exact_bags_ha,
+            "age_multiplier": _original_age_multiplier,
+            "farm_area_ha": _original_area_ha,
+            "exact_age_adjusted_bags_farm_year": _original_exact_farm_bags,
+            "full_bags_farm_year": _original_full_farm_bags,
+            "bag_size_kg": float(BAG_SIZE_KG),
+            "npk_cost_rp": _original_npk_cost,
+            "zone_mg_urea_cost_rp": _original_zone_cost,
+            "combined_cost_rp": _original_combined_cost,
+            "allowed_spend_rp": _original_allowance,
+            "difference_vs_allowance_rp": _original_difference,
+        }
+        _original_calc_rows = [
+            ["Original profile baseline (N / P / K / Mg)", " / ".join(f"{_original_targets[n]:g}" for n in ("N", "P", "K", "Mg")) + " kg/ha/year"],
+            ["Current blend (anchor)", str(_original_blend_name)],
+            ["Elemental nutrient per bag (N / P / K)", " / ".join(f"{_original_per_bag[n]:,.{_overview_decimals}f}" for n in ("N", "P", "K")) + " kg/bag"],
+            ["Required exact bags by nutrient", " / ".join(f"{n}: {_original_bags_by_nutrient[n]:,.{_overview_decimals}f}" for n in ("N", "P", "K"))],
+            ["Limiting nutrient; exact baseline bags/ha", f"{_original_limiting_nutrient}; {_original_exact_bags_ha:,.{_overview_decimals}f} bags/ha/year"],
+            ["Age multiplier after budget cap × farm area", f"{_original_age_multiplier:.{_overview_decimals}f} × {_original_area_ha:,.{_overview_decimals}f} ha"],
+            ["Exact age-adjusted farm bags", f"{_original_exact_bags_ha:,.{_overview_decimals}f} × {_original_age_multiplier:.2f} × {_original_area_ha:,.{_overview_decimals}f} = {_original_exact_farm_bags:,.{_overview_decimals}f} bags"],
+            ["Full bags to buy", f"ceil({_original_exact_farm_bags:,.{_overview_decimals}f}) = {_original_full_farm_bags} bags"],
+            ["NPK cost + zone Mg/Urea cost", f"{_original_full_farm_bags} × {_overview_rp(_original_estimate['bag_price_rp'])} + {_overview_rp(_original_zone_cost)} = {_overview_rp(_original_combined_cost)}"],
+            ["Allowed spend; amount exceeded", f"{_overview_rp(_original_allowance)}; {_overview_rp(_original_difference)} over"],
+        ]
+        _overview_table("Starting target calculation before budget-based tier selection", ["Calculation step", "Result"], _original_calc_rows, details=True)
+        NPK_BASELINE_BUDGET_DECISION["original_profile_recalculation"] = _original_recalculation
+
+    # Show the selected target recomputation when the budget changes the configured tier.
+    _fallback_recalculation = None
+    if _baseline_decision.get("target_adjustment_applied"):
+        _fallback_profile_name = _baseline_decision["selected_profile"]
+        _fallback_targets = NPK_BASELINE_PROFILES_KG_HA_YEAR[_fallback_profile_name]
+        _fallback_estimate = _baseline_decision.get("fallback_profile_estimate") or {}
+        _fallback_blend_name = _fallback_estimate.get("blend_option")
+        if _fallback_blend_name == "Current blend":
+            _fallback_label = parse_analysis(USER_FERTILIZER_ANALYSIS)
+        else:
+            _fallback_label = parse_analysis(ALTERNATIVE_NPK_PRODUCTS[_fallback_blend_name])
+        _fallback_per_bag, _, _ = build_annual_nutrients(_fallback_label, 1.0)
+        _fallback_bags_by_nutrient = {
+            _nutrient: float(_fallback_targets[_nutrient]) / float(_fallback_per_bag[_nutrient])
+            for _nutrient in ("N", "P", "K")
+        }
+        _fallback_limiting_nutrient = max(_fallback_bags_by_nutrient, key=_fallback_bags_by_nutrient.get)
+        _fallback_exact_bags_ha = max(_fallback_bags_by_nutrient.values())
+        _fallback_age_multiplier = float(_fallback_estimate["age_multiplier"])
+        _fallback_area_ha = float(USER_FARM_AREA_HA)
+        _fallback_exact_farm_bags = _fallback_exact_bags_ha * _fallback_age_multiplier * _fallback_area_ha
+        _fallback_full_farm_bags = int(_overview_math.ceil(_fallback_exact_farm_bags - 1e-12))
+        _fallback_npk_cost = _fallback_full_farm_bags * float(_fallback_estimate["bag_price_rp"])
+        _fallback_zone_cost = float(_baseline_decision["zone_mg_urea_cost_rp"])
+        _fallback_combined_cost = _fallback_npk_cost + _fallback_zone_cost
+        _fallback_allowance = float(_baseline_decision["allowed_spend_rp"])
+        _fallback_difference = _fallback_combined_cost - _fallback_allowance
+        _fallback_recalculation = {
+            "profile": _fallback_profile_name,
+            "baseline_elemental_kg_ha_year": {n: float(_fallback_targets[n]) for n in ("N", "P", "K", "Mg")},
+            "blend_option": _fallback_blend_name,
+            "label_percent_n_p2o5_k2o_mgo": {k: float(v) for k, v in _fallback_label.items()},
+            "elemental_kg_per_bag": {n: float(_fallback_per_bag[n]) for n in ("N", "P", "K", "Mg")},
+            "bags_per_ha_required_by_nutrient": _fallback_bags_by_nutrient,
+            "limiting_nutrient": _fallback_limiting_nutrient,
+            "baseline_exact_bags_per_ha_year": _fallback_exact_bags_ha,
+            "age_multiplier": _fallback_age_multiplier,
+            "farm_area_ha": _fallback_area_ha,
+            "exact_age_adjusted_bags_farm_year": _fallback_exact_farm_bags,
+            "full_bags_farm_year": _fallback_full_farm_bags,
+            "bag_size_kg": float(BAG_SIZE_KG),
+            "npk_cost_rp": _fallback_npk_cost,
+            "zone_mg_urea_cost_rp": _fallback_zone_cost,
+            "combined_cost_rp": _fallback_combined_cost,
+            "allowed_spend_rp": _fallback_allowance,
+            "difference_vs_allowance_rp": _fallback_difference,
+        }
+        _recalc_rows = [
+            ["Selected budget-responsive yield target", _fallback_profile_name.replace("_ton_ha", " ton/ha yield")],
+            ["Selected baseline N / P / K / Mg (kg/ha/year)", " / ".join(f"{_fallback_targets[n]:g}" for n in ("N", "P", "K", "Mg"))],
+            ["Current blend (anchor)", str(_fallback_blend_name)],
+            ["Elemental nutrient per bag (N / P / K)", " / ".join(f"{_fallback_per_bag[n]:,.{_overview_decimals}f}" for n in ("N", "P", "K")) + " kg/bag"],
+            ["Required exact bags by nutrient", " / ".join(f"{n}: {_fallback_bags_by_nutrient[n]:,.{_overview_decimals}f}" for n in ("N", "P", "K"))],
+            ["Limiting nutrient; exact baseline bags/ha", f"{_fallback_limiting_nutrient}; {_fallback_exact_bags_ha:,.{_overview_decimals}f} bags/ha/year"],
+            ["Age multiplier after budget cap × farm area", f"{_fallback_age_multiplier:.{_overview_decimals}f} × {_fallback_area_ha:,.{_overview_decimals}f} ha"],
+            ["Exact age-adjusted farm bags", f"{_fallback_exact_bags_ha:,.{_overview_decimals}f} × {_fallback_age_multiplier:.2f} × {_fallback_area_ha:,.{_overview_decimals}f} = {_fallback_exact_farm_bags:,.{_overview_decimals}f} bags"],
+            ["Full bags to buy", f"ceil({_fallback_exact_farm_bags:,.{_overview_decimals}f}) = {_fallback_full_farm_bags} bags"],
+            ["NPK full-bag cost", f"{_fallback_full_farm_bags} × {_overview_rp(_fallback_estimate['bag_price_rp'])} = {_overview_rp(_fallback_npk_cost)}"],
+            ["Add zone Mg/Urea cost", f"{_overview_rp(_fallback_npk_cost)} + {_overview_rp(_fallback_zone_cost)} = {_overview_rp(_fallback_combined_cost)}"],
+            ["Compare with allowance", f"{_overview_rp(_fallback_combined_cost)} − {_overview_rp(_fallback_allowance)} = {_overview_rp(abs(_fallback_difference))} " + ("over" if _fallback_difference > 0 else "under" if _fallback_difference < 0 else "within")],
+        ]
+        _overview_table("Selected target recalculation arithmetic", ["Calculation step", "Result"], _recalc_rows, details=True)
+        NPK_BASELINE_BUDGET_DECISION["fallback_recalculation"] = _fallback_recalculation
+    else:
+        pass
 
     # Show the arithmetic behind the budget-aware annual matching table.
     _budget_calc_rows = []
@@ -5511,11 +6220,11 @@ def run_v2_scan(
             _summary_row[5] if len(_summary_row) > 5 else "N/A",
         ])
     _overview_table(
-        "Calculation behind table 3: budget-aware blend quantity and cost",
+        "Supporting calculation: budget-capped blend quantity and cost",
         ["Blend", "Baseline bags/ha", "Applied multiplier", "Farm area", "Exact farm bags", "Rounded purchase", "NPK cost formula", "Zone Mg/Urea cost", "Combined cost"],
         _budget_calc_rows,
+        details=True,
     )
-    print("Table 3 formulas: exact farm bags = baseline exact bags/ha/year × applied (budget-capped) age multiplier × farm area (ha). Full bags = ceil(exact farm bags). NPK cost = full bags × configured blend price/bag. Combined estimate = NPK cost + whole-bag zone Mg/Urea cost.")
 
     # Persist the budget-aware table (the one printed as table 3) and its arithmetic.
     _budget_json_rows = []
@@ -5576,6 +6285,7 @@ def run_v2_scan(
             "closest_blend_option": (
                 _overview_closest["option"].get("blendOption") if _overview_closest else None
             ),
+            "baseline_profile_selection": NPK_BASELINE_BUDGET_DECISION,
             "options": _budget_json_rows,
         }
         with Path(OUTPUT_JSON).open("w", encoding="utf-8") as _json_file:
@@ -5645,8 +6355,8 @@ def run_v2_scan(
             ["Blend option", "Age multiplier", "Exact bags/farm/year", "Full bags/farm/year",
              "Price/bag", "NPK cost", "Zone Mg/Urea cost", "Combined estimate", "Vs budget (reference only)"],
             _uncapped_rows,
+            details=True,
         )
-        print("This scenario uses the configured age multiplier in full. The budget is shown only for comparison and does not cap the multiplier.")
         _uncapped_calc_rows = []
         for _blend_estimate, _display_row in zip(
             _npk_comparison.get("blend_purchase_price_estimates", []), _uncapped_rows
@@ -5680,8 +6390,8 @@ def run_v2_scan(
             "Calculation behind table 4: uncapped age-multiplier quantity and cost",
             ["Blend", "Baseline exact bags/ha", "Full age multiplier", "Farm area", "Exact farm bags", "Rounded purchase", "NPK cost formula", "Zone Mg/Urea cost", "Combined estimate"],
             _uncapped_calc_rows,
+            details=True,
         )
-        print("Table 4 uses the same steps, but keeps the full age multiplier: exact farm bags = baseline exact bags/ha/year × full age multiplier × areaHa; full bags = ceil(exact); NPK cost = full bags × price/bag; combined estimate = NPK cost + zone Mg/Urea whole-bag cost. The budget is comparison-only for this table.")
         # Keep the same uncapped farm-cost breakdown in the JSON result.
         if "combined_fertilizer_calculations" in combined_result:
             combined_result["combined_fertilizer_calculations"]["uncapped_age_multiplier_price_estimates"] = _uncapped_json_rows
@@ -5709,6 +6419,7 @@ def run_v2_scan(
         "5. Baseline nutrient target for the whole farm",
         ["Nutrient", "Baseline rate", "Farm area", "Calculation", "Farm target"],
         _farm_baseline_rows,
+        details=True,
     )
 
     # For each blend, convert one bag's N/P/K/Mg labels to elemental kg, then divide
@@ -5779,12 +6490,7 @@ def run_v2_scan(
          "NPK exact farm bags", "NPK full farm bags", "Mg-only bag equivalent", "Blend-only bags for all NPKMg (exact)",
          "Blend-only full bags for all NPKMg", "Age multiplier target (NPK basis)"],
         _farm_blend_bag_rows,
-    )
-    print(
-        "Formula: farm target (kg/year) = baseline (kg/ha/year) × areaHa. "
-        "For each nutrient: exact bags = farm target ÷ elemental kg of that nutrient per bag. "
-        "The notebook's NPK blend quantity uses max(N, P, K); Mg is supplemented separately. "
-        "The all-four columns show the bag count if the blend alone had to meet N, P, K, and Mg."
+        details=True,
     )
     if "combined_fertilizer_calculations" in combined_result:
         combined_result["combined_fertilizer_calculations"]["farm_area_scaled_blend_bag_calculations"] = {
@@ -5797,22 +6503,27 @@ def run_v2_scan(
         with Path(OUTPUT_JSON).open("w", encoding="utf-8") as _json_file:
             json.dump(combined_result, _json_file, indent=2, ensure_ascii=False, allow_nan=False)
 
-    if _overview_budget is None:
-        print("Enter a nonnegative annual Rupiah-per-hectare amount in fertilizerBudgetRp; it is multiplied by farm.areaHa for whole-farm comparisons.")
-    elif not _overview_rankable:
-        print("Cannot rank options against the budget because required configured bag prices or zone product costs are unavailable.")
-    else:
-        print(f"Annual fertilizer budget: {_overview_rp(_overview_budget_per_ha)}/ha × "
-              f"{FERTILIZER_BUDGET_AREA_HA:,.3f} ha = {_overview_rp(_overview_budget)} for the farm.")
-        print(f"Zone top-up cost included: {_overview_rp(_overview_zone_topup_cost)} "
-              f"({', '.join(_overview_zone_topup_labels) if _overview_zone_topup_labels else 'unavailable'}; whole bags).")
-        print("Ranking uses the smallest absolute difference between the budget and "
-              "age-adjusted NPK whole-bag cost plus selected zone Mg/Urea whole-bag cost.")
-        print(f"Closest by estimated cost: {_overview_closest['option'].get('blendOption')} — "
-              f"{_overview_rp(_overview_closest['combined_cost'])}, a difference of "
-              f"{_overview_rp(abs(_overview_closest['delta']))} from budget. Nutrient matching still matters.")
+    if _overview_detail_sections:
+        _overview_display(_OverviewHTML(
+            "<details style='margin:14px 0'>"
+            "<summary style='font-weight:600;cursor:pointer'>Optional: detailed calculations and supporting tables</summary>"
+            "<div style='padding:8px 0'>" + "".join(_overview_detail_sections) + "</div>"
+            "</details>"
+        ))
 
-    # %% Notebook code cell 60
+    if _overview_budget is None:
+        print("Add fertilizerBudgetRp to rank blend options against the farm budget.")
+    elif not _overview_rankable:
+        print("Budget ranking unavailable: a required bag price or zone cost is missing.")
+    else:
+        print(
+            f"Budget: {_overview_rp(_overview_budget)} farm-wide. "
+            f"Closest option: {_overview_closest['option'].get('blendOption')} "
+            f"({_overview_rp(_overview_closest['combined_cost'])}; "
+            f"difference {_overview_rp(abs(_overview_closest['delta']))})."
+        )
+
+    # %% Notebook code cell 63
     # Summarize detected trees in the same four tree-mean VARI quartiles used by the heatmap.
     _assessment_quartile_counts = [0, 0, 0, 0]
     _assessment_unclassified_trees = 0
@@ -5897,71 +6608,22 @@ def run_v2_scan(
     )
     print("Farmer-history supply uses dosePerTree × fertilizerHistory.freq × detected tree count, then the configured nutrient-label fractions and oxide-to-element conversions.")
     print("Farm baseline = configured baseline (kg/ha/year) × farm areaHa. These are elemental N, P, K, and Mg kilograms per year.")
-
-
-    # Match the tagged v2 engine's dual-JSON output contract.
-    vari_result = dict(combined_result)
-    vari_result["schema"] = 2
-    vari_result["package_version"] = "0.2.0"
-    vari_result["image"] = {
-        "name": image_path.name,
-        "width": width,
-        "height": height,
-        "trees": len(trees),
-        "trees_dropped_partial": skipped_partial,
-        "trees_dropped_oversized": skipped_oversized,
-    }
-    vari_result["summary"] = {
-        "reference_zone_ids": zone_json[0]["recommendation"].get("reference_zone_ids", []) if zone_json else [],
-        "reference_fallback_all_zones": zone_json[0]["recommendation"].get("reference_fallback_all_zones", False) if zone_json else False,
-        "p25_zone_mean_vari": zone_json[0]["recommendation"].get("p25_zone_mean_vari") if zone_json else None,
-        "reference_zone_mean_vari": zone_json[0]["recommendation"].get("reference_zone_mean_vari") if zone_json else None,
-        "p95_p25_vari_gap": zone_json[0]["recommendation"].get("p95_p25_vari_gap") if zone_json else None,
-        "boost_mode": zone_json[0]["recommendation"].get("boost_mode") if zone_json else None,
-        "blanket_vari_gap_cutoff": zone_json[0]["recommendation"].get("blanket_vari_gap_cutoff") if zone_json else None,
-    }
-
-    vari_result_path = OUTPUT_DIR / "vari_result.json"
-    with vari_result_path.open("w", encoding="utf-8") as _vari_file:
-        json.dump(vari_result, _vari_file, indent=2, ensure_ascii=False, allow_nan=False)
-
-    combined_result["image"] = vari_result["image"]
-    combined_result["summary"] = vari_result["summary"]
-    with Path(OUTPUT_JSON).open("w", encoding="utf-8") as _combined_file:
-        json.dump(combined_result, _combined_file, indent=2, ensure_ascii=False, allow_nan=False)
-
-    print(f"Dual JSON written: {vari_result_path.resolve()} and {Path(OUTPUT_JSON).resolve()}")
-    return vari_result
+    return combined_result
 
 
 def main(argv=None) -> int:
-    """Command-line entry point for a single VARI/fertilizer scan."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Run oil-palm VARI zoning and fertilizer analysis."
-    )
+    parser = argparse.ArgumentParser(description="Run oil-palm zoning, VARI, and fertilizer analysis.")
     parser.add_argument(
         "--user-request-submission-json",
         required=True,
-        help="Complete user submission as a JSON string.",
+        help="Complete farmer submission as a JSON string.",
     )
-    parser.add_argument(
-        "--image",
-        required=True,
-        help="Path to the RGB/WebODM input image.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        default="outputs",
-        help="Directory for generated outputs (default: outputs).",
-    )
+    parser.add_argument("--image", required=True, help="Path to the RGB/WebODM input image.")
+    parser.add_argument("--output-dir", default="outputs", help="Directory for generated files (default: outputs).")
     args = parser.parse_args(argv)
-    run_v2_scan(
-        image_path=args.image,
-        user_submission_data=args.user_request_submission_json,
-        output_dir=args.output_dir,
-    )
+    run_analysis(args.user_request_submission_json, args.image, args.output_dir)
     return 0
 
 
