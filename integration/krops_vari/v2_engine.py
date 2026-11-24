@@ -1,8 +1,8 @@
 """Notebook-exported oil-palm zoning, VARI, and fertilizer analysis CLI.
 
-This file is generated from notebook_iteration_2_clean.ipynb. It accepts the full
-farmer submission as a JSON string and an RGB/WebODM image path. It writes all
-results to the selected output directory and never opens image windows.
+The calculations come from notebook_iteration_2_clean.ipynb. The package entry
+point accepts a farmer submission and an RGB/WebODM image path and writes the
+scan results to the selected output directory.
 """
 from __future__ import annotations
 
@@ -10,6 +10,9 @@ import json
 import os
 from pathlib import Path
 from html.parser import HTMLParser as _HTMLParser
+
+from . import __version__
+from .config import resolve_model_path
 
 
 class HTML(str):
@@ -69,45 +72,33 @@ _OverviewHTML = HTML
 _tree_summary_display = display
 _TreeSummaryHTML = HTML
 
-CONCRETE_MODEL_NAME = "krops_model_v0.2_yolo26l.mlpackage"
-
-
-def _resolve_model_path() -> Path:
-    """Resolve the fixed CoreML model beside this script, then from the working directory."""
-    candidates = (
-        Path(__file__).resolve().parent / CONCRETE_MODEL_NAME,
-        Path(__file__).resolve().parents[1] / CONCRETE_MODEL_NAME,
-        Path.cwd() / CONCRETE_MODEL_NAME,
-    )
-    model = next((candidate for candidate in candidates if candidate.exists()), candidates[0])
-    model = model.resolve()
-    if not model.exists():
-        raise FileNotFoundError(f"CoreML model not found: {model}")
-    return model
-
-
-def run_analysis(user_request_submission_json: str | dict, image_path: str | Path, output_dir: str | Path = "outputs") -> dict:
-    """Run the notebook pipeline from a JSON string/object and an RGB/WebODM image."""
-    if isinstance(user_request_submission_json, str):
+def run_v2_scan(
+    image_path: str | Path,
+    user_submission_data: dict | str,
+    output_dir: str | Path = Path("outputs"),
+    model_path: str | Path | None = None,
+) -> dict:
+    """Run the scan and write the zone analysis and Swift-compatible result JSONs."""
+    if isinstance(user_submission_data, str):
         try:
-            user_submission_data = json.loads(user_request_submission_json)
+            user_submission_data = json.loads(user_submission_data)
         except json.JSONDecodeError as exc:
             raise ValueError(f"--user-request-submission-json must be valid JSON: {exc}") from exc
-    else:
-        user_submission_data = user_request_submission_json
     if not isinstance(user_submission_data, dict):
         raise ValueError("The user submission JSON must be an object.")
 
     input_image = Path(image_path).expanduser().resolve()
     if not input_image.is_file():
         raise FileNotFoundError(f"Image not found: {input_image}")
-    model_path = _resolve_model_path()
+    resolved_model = Path(model_path or resolve_model_path()).expanduser().resolve()
+    if not resolved_model.exists():
+        raise FileNotFoundError(f"Core ML model not found: {resolved_model}")
     resolved_output_dir = Path(output_dir).expanduser().resolve()
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
     _USER_SUBMISSION_DATA = user_submission_data
     _INPUT_IMAGE = input_image
     _OUTPUT_DIR = resolved_output_dir
-    _MODEL_PATH = model_path
+    _MODEL_PATH = resolved_model
 
     # %% Notebook code cell 3
     import csv
@@ -6608,7 +6599,43 @@ def run_analysis(user_request_submission_json: str | dict, image_path: str | Pat
     )
     print("Farmer-history supply uses dosePerTree × fertilizerHistory.freq × detected tree count, then the configured nutrient-label fractions and oxide-to-element conversions.")
     print("Farm baseline = configured baseline (kg/ha/year) × farm areaHa. These are elemental N, P, K, and Mg kilograms per year.")
-    return combined_result
+
+    # Restore the package output contract after the notebook calculations finish.
+    combined_result["image"] = {
+        "name": input_image.name,
+        "width": width,
+        "height": height,
+        "trees": len(trees),
+        "trees_dropped_partial": skipped_partial,
+        "trees_dropped_oversized": skipped_oversized,
+    }
+    recommendation = zone_json[0]["recommendation"] if zone_json else {}
+    combined_result["summary"] = {
+        "reference_zone_ids": recommendation.get("reference_zone_ids", []),
+        "reference_fallback_all_zones": recommendation.get("reference_fallback_all_zones", False),
+        "p25_zone_mean_vari": recommendation.get("p25_zone_mean_vari"),
+        "reference_zone_mean_vari": recommendation.get("reference_zone_mean_vari"),
+        "p95_p25_vari_gap": recommendation.get("p95_p25_vari_gap"),
+        "boost_mode": recommendation.get("boost_mode"),
+        "blanket_vari_gap_cutoff": recommendation.get("blanket_vari_gap_cutoff"),
+    }
+    with combined_json_path.open("w", encoding="utf-8") as zone_file:
+        json.dump(combined_result, zone_file, indent=2, ensure_ascii=False, allow_nan=False)
+
+    vari_result = {**combined_result, "schema": 2, "package_version": __version__}
+    vari_result_path = OUTPUT_DIR / "vari_result.json"
+    with vari_result_path.open("w", encoding="utf-8") as vari_file:
+        json.dump(vari_result, vari_file, indent=2, ensure_ascii=False, allow_nan=False)
+    return vari_result
+
+
+def run_analysis(
+    user_request_submission_json: str | dict,
+    image_path: str | Path,
+    output_dir: str | Path = "outputs",
+) -> dict:
+    """Run the scan using the notebook export's argument order."""
+    return run_v2_scan(image_path, user_request_submission_json, output_dir)
 
 
 def main(argv=None) -> int:
