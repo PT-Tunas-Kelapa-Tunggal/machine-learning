@@ -36,3 +36,4 @@ integration/data/
 
 # notebook
 segmentation/iteration2/outputs/
+segmentation/iteration2/outputs_notebook/

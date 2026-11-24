@@ -21,6 +21,12 @@ _cli_parser.add_argument(
     required=True,
     help="Path to the input RGB/WebODM image.",
 )
+_cli_parser.add_argument(
+    "--output-dir",
+    type=Path,
+    default=Path("outputs"),
+    help="Destination directory for output files (default: outputs).",
+)
 _cli_args = _cli_parser.parse_args()
 try:
     _USER_SUBMISSION_DATA = _cli_json.loads(_cli_args.user_request_submission_json)
@@ -61,6 +67,8 @@ import html
 from pathlib import Path
 import coremltools as ct
 import cv2
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as path_effects
 import numpy as np
@@ -69,7 +77,12 @@ from PIL import Image, ImageDraw, ImageFont
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 
-from IPython.display import HTML
+try:
+    from IPython.display import HTML
+except ImportError:
+    class HTML:
+        def __init__(self, data=None, *args, **kwargs):
+            self.data = data
 
 # Standalone runs save plots/images to disk but never open viewer windows.
 def display(*_args, **_kwargs):
@@ -83,12 +96,13 @@ def display(*_args, **_kwargs):
 # ===== Notebook code cell 4 =====
 # ------------------------- Configuration -------------------------
 # All generated files (images, tables, JSON, and crop folders) go here.
-OUTPUT_DIR = Path("outputs")
+OUTPUT_DIR = Path(_cli_args.output_dir)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 IMAGE_PATH = _cli_args.image  # Input RGB image supplied with --image.
 # IMAGE_PATH = "webodm_last_image_1st_flight.jpeg"
-MODEL_PATH = "krops_model_v0.2_yolo26l.mlpackage"  # CoreML object-detection model used to detect palm trees.
+_DEFAULT_MODEL_PATH = Path(__file__).resolve().parent / "krops_model_v0.2_yolo26l.mlpackage"
+MODEL_PATH = str(_DEFAULT_MODEL_PATH if _DEFAULT_MODEL_PATH.exists() else Path("krops_model_v0.2_yolo26l.mlpackage"))  # CoreML object-detection model used to detect palm trees.
 # MODEL_PATH = "yolo26m-krops-v0.1.mlpackage"  # CoreML object-detection model used to detect palm trees.
 OUTPUT_JSON = str(OUTPUT_DIR / "oil_palm_zones_vari.json")  # JSON with metadata, zone/tree statistics, and recommendations.
 OUTPUT_FERTILIZER_HISTORY_JSON = str(OUTPUT_DIR / "user_fertilizer_summary.json")  # Coordinates and annual total product mass from submitted fertilizer history.
@@ -3385,7 +3399,7 @@ import math
 import html as _npk_html
 from contextlib import redirect_stdout as _npk_redirect_stdout
 from io import StringIO as _NPKStringIO
-from IPython.display import HTML as _NPKHTML
+_NPKHTML = HTML
 _npk_display = display
 from datetime import date as _npk_date
 
@@ -5155,7 +5169,7 @@ print("If Part 1 recommends a positive zone boost, use its zone-level amounts se
 
 # ===== Notebook code cell 58 =====
 # Compact recap of the input, zone-level product quantities, and NPK budget fit.
-from IPython.display import HTML as _OverviewHTML
+_OverviewHTML = HTML
 _overview_display = display
 import html as _overview_html
 import math as _overview_math
