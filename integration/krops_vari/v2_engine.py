@@ -278,8 +278,8 @@ def run_analysis(user_request_submission_json: str | dict, image_path: str | Pat
     KIESERITE_BASE_RATE_SOURCE = "configured default; user fertilizer history ignored"
     DOLOMITE_BASE_PRODUCT_KG_PER_PALM_PER_YEAR = DEFAULT_DOLOMITE_BASE_KG_PER_PALM_PER_YEAR
     DOLOMITE_BASE_RATE_SOURCE = "configured default; user fertilizer history ignored"
-    ZA_BASE_PRODUCT_KG_PER_PALM_PER_YEAR = None
-    UREA_BASE_PRODUCT_KG_PER_PALM_PER_YEAR = None
+    ZA_BASE_PRODUCT_KG_PER_PALM_PER_YEAR = 1.0
+    UREA_BASE_PRODUCT_KG_PER_PALM_PER_YEAR = 1.0
     FERTILIZER_BASE_PRODUCT_KG_PER_PALM_PER_YEAR = {
         "kieserite_Mg_expensive": KIESERITE_BASE_PRODUCT_KG_PER_PALM_PER_YEAR,
         "dolomite_Mg_cheaper": DOLOMITE_BASE_PRODUCT_KG_PER_PALM_PER_YEAR,
